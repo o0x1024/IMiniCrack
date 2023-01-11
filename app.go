@@ -1,10 +1,12 @@
 package main
 
 import (
+	"IMiniCrack/pkg/util"
 	"context"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"os/exec"
+	runtime2 "runtime"
 )
 
 // App struct
@@ -27,11 +29,33 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) OpenDecDir(path string) {
 	exec.Command(`cmd`, `/c`, `explorer`, path).Start()
 }
-func (a *App) OpenFile() string {
+func (a *App) OpenFile(curPath string) string {
 	//file := p.rt.Dialog.SelectFile()
+	parent := ""
+	if curPath == "" {
+		osType := runtime2.GOOS
+		switch osType {
+		case "windows":
+			parent = "C:\\"
+		case "linux":
+			parent = "/"
+		case "darwin":
+			parent = "/"
+		}
+	} else {
+		parent = util.GetParentDirectory(curPath)
+
+	}
+
 	file, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "Select File",
-		DefaultDirectory: "C:\\Users\\test\\Documents\\WeChat Files\\Applet\\",
+		DefaultDirectory: parent,
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "wxpack (*.wxapkg)",
+				Pattern:     "*.wxapkg",
+			},
+		},
 	})
 	if err != nil {
 		panic(err)
@@ -40,9 +64,20 @@ func (a *App) OpenFile() string {
 }
 
 func (a *App) OpenDir() string {
+
+	dd := ""
+	osType := runtime2.GOOS
+	switch osType {
+	case "windows":
+		dd = "C:\\"
+	case "linux":
+		dd = "/"
+	case "darwin":
+		dd = "/"
+	}
 	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "Select Directory",
-		DefaultDirectory: "C:\\",
+		DefaultDirectory: dd,
 	})
 	if err != nil {
 		panic(err)

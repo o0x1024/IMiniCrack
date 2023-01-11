@@ -10,8 +10,8 @@ export function OpenDir() {
   return window['go']['main']['App']['OpenDir']();
 }
 
-export function OpenFile() {
-  return window['go']['main']['App']['OpenFile']();
+export function OpenFile(arg1) {
+  return window['go']['main']['App']['OpenFile'](arg1);
 }
 
 export function WailsInit(arg1) {

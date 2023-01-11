@@ -33,6 +33,13 @@ func GetParentDirectory(dirctory string) string {
 
 }
 
+func GetFileName(path string) string {
+	if strings.LastIndex(path, "/") == -1 {
+		return substr(path, strings.LastIndex(path, "\\")+1, len(path))
+	}
+	return substr(path, strings.LastIndex(path, "/")+1, len(path))
+}
+
 func substr(s string, pos, length int) string {
 	runes := []rune(s)
 	l := pos + length

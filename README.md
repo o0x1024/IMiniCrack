@@ -1,14 +1,19 @@
 # README
 
-## 关于
-此应用用于对小程序包进行解压，使用wails（golang）+ vue+typescript的技术栈开发而成。
+## About
 
-目前提供了windows版本供下载，其它版本可下载源码自行编译。
-![image](https://user-images.githubusercontent.com/53891640/210968413-2a3679ab-3fd1-4315-803a-f0aa35ec0de3.png)
+This is the official Wails Vue-TS template.
 
+You can configure the project by editing `wails.json`. More information about the project settings can be found
+here: https://wails.io/docs/reference/project-config
 
-## TODO
-增加敏感信息搜索功能
+## Live Development
 
-## 声明
-此项目仅用于学习和交流使用，请不要用于非法用途
+To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
+server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
+and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
+to this in your browser, and you can call your Go code from devtools.
+
+## Building
+
+To build a redistributable, production mode package, use `wails build`.

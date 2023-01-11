@@ -6,6 +6,6 @@ export function OpenDecDir(arg1:string):Promise<void>;
 
 export function OpenDir():Promise<string>;
 
-export function OpenFile():Promise<string>;
+export function OpenFile(arg1:string):Promise<string>;
 
 export function WailsInit(arg1:runtime.Runtime):Promise<void>;

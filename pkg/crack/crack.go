@@ -56,7 +56,7 @@ func (c *Crack) Unpack(wxpkgPath, wxid, outPath string) string {
 	if err != nil {
 		return err.Error()
 	}
-	err = c.unPackFile(decData, outPath, wxid)
+	err = c.unPackFile(wxpkgPath, decData, outPath, wxid)
 	if err != nil {
 		return err.Error()
 	}
@@ -92,8 +92,11 @@ func (c *Crack) decWxApkg(wxapkgPath string, wxid string) ([]byte, error) {
 	return originData, nil
 }
 
-func (c *Crack) unPackFile(data []byte, outRoot string, wxid string) error {
+func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string, wxid string) error {
 
+	//fmt.Println(wxapkgPath)
+	wxPackName := util.GetFileName(wxapkgPath)
+	//fmt.Println()
 	r := bytes.NewReader(data)
 	firstMark := make([]byte, 1)
 	_, err := r.Read(firstMark)
@@ -159,7 +162,7 @@ func (c *Crack) unPackFile(data []byte, outRoot string, wxid string) error {
 	nameList := []string{}
 	for _, v := range fileList {
 		outFileName := v.Name
-		outFilePath := outRoot + "\\" + wxid + "\\" + outFileName
+		outFilePath := outRoot + "\\" + wxid + "\\" + wxPackName + "\\" + outFileName
 		nameList = append(nameList, outFilePath)
 
 		parentDir := util.GetParentDirectory(outFilePath)
@@ -215,7 +218,7 @@ func (c *Crack) unPackFile(data []byte, outRoot string, wxid string) error {
 	}
 
 	for _, sfile := range sliceList {
-		outFilePath := outRoot + "\\" + wxid + "\\" + sfile.Name
+		outFilePath := outRoot + "\\" + wxid + "\\" + wxPackName + "\\" + sfile.Name
 
 		parentDir := util.GetParentDirectory(outFilePath)
 		if !util.PathExists(parentDir) {

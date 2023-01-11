@@ -17,25 +17,25 @@
   </a-row> -->
 
   <div style="padding: 10px;">
-    <a-row gutter="10">
+    <a-row :gutter="10">
       <a-col>
         <p style="padding: 5px;">小程序包路径：</p>
       </a-col>
       <a-col>
-        <a-input v-model:value="wxPath" style="width: 500px;"
-          placeholder="C:\Users\test\Documents\WeChat Files\Applet" />
+        <a-input v-model:value="wxPath" style="width: 530px;"
+          placeholder="Win小程序包一般在[C:\Users\{username}}\Documents\WeChat Files\Applet\]目录" />
       </a-col>
-      <c-col :span="2">
+      <a-col :span="2">
         <a-button @click="btnChange">
           <template #icon>
             <UploadOutlined />
           </template>
           选择文件
         </a-button>
-      </c-col>
+      </a-col>
     </a-row>
 
-    <a-row gutter="10">
+    <a-row :gutter="10">
       <a-col>
         <p style="padding: 5px;">WXID：&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
       </a-col>
@@ -67,9 +67,61 @@
 
 
 
-    <a-row>
-      <a-col>
-        <a-button type="primary" @click="btnDecExport">解密导出</a-button>
+    <a-row justify="space-between">
+      <a-row :gutter="10">
+        <a-col>
+          <a-button type="primary" @click="btnDecExport">解密导出</a-button>
+        </a-col>
+        <a-col>
+          <a-button  @click="btnEmpty">清空数据</a-button>
+
+      </a-col>
+      </a-row>
+
+
+      <a-col :span="4">
+        <a-button type="dashed" @click="btnSensitiveScan">敏感信息扫描</a-button>
+      </a-col>
+    </a-row>
+
+    <a-row v-if="SensitiveScanFlag" style="margin-top: 10px;">
+
+      <a-col :span="24">
+        <div class="sensitive" style="padding: 20px;">
+
+          <a-row justify="space-between">
+            <a-col>
+              <a-row>
+                <a-col>
+                  <a-button type="primary">开始扫描</a-button>
+                </a-col>
+              </a-row>
+
+              <!-- <a-row style="margin-top: 10px;">
+                <a-col>
+                  <a-button>重置所有</a-button>
+                </a-col>
+              </a-row> -->
+            </a-col>
+
+            <a-col :span="10">
+              <a-row :gutter="10">
+                <a-col>
+                  <a-button type="primary">添加正则</a-button>
+                </a-col>
+                <a-col :span="18">
+                  <a-input v-model:value="regx" placeholder="Regx" />
+                </a-col>
+              </a-row>
+              <a-row style="margin-top: 5px;">
+                <a-col :span="24">
+                  <a-textarea  v-model:value="regxs" placeholder="regx set" allow-clear :rows="4" />
+                </a-col>
+              </a-row>
+            </a-col>
+
+          </a-row>
+        </div>
       </a-col>
 
     </a-row>
@@ -78,7 +130,7 @@
     <a-row style="margin-top: 10px;">
       <a-col :span="24">
         <!-- :disabled="true" -->
-        <a-textarea v-model:value="logger" placeholder="日志" :rows="23" />
+        <a-textarea v-model:value="logger" id="logtextarea" :change="logChange()" placeholder="" :rows="logRow" />
       </a-col>
     </a-row>
   </div>
@@ -89,7 +141,7 @@
 
 <script lang="ts">
 import { computed, onMounted, reactive } from 'vue'
-import { OpenFile, OpenDir,OpenDecDir } from "../../wailsjs/go/main/App"
+import { OpenFile, OpenDir, OpenDecDir } from "../../wailsjs/go/main/App"
 import { Unpack } from "../../wailsjs/go/crack/Crack"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons-vue';
@@ -109,7 +161,7 @@ export default defineComponent({
     onMounted(() => {
       EventsOn("log", (data: any) => {
         if (data) {
-          logger.value += data+"\n"
+          logger.value += data + "\n"
           // console.log(data)
         }
       })
@@ -119,9 +171,22 @@ export default defineComponent({
 
     let wxId = ref('')
     let wxPath = ref('')
+    let regx = ref('')
+    let regxs = ref('')
     let outPath = ref('C:\\')
+    let logRow = ref(25)
     let logger = ref('')
+    let SensitiveScanFlag = ref(false)
 
+
+    const btnSensitiveScan = () => {
+      SensitiveScanFlag.value = !SensitiveScanFlag.value
+      if (SensitiveScanFlag.value) {
+        logRow.value = 16
+      } else {
+        logRow.value = 25
+      }
+    }
 
     wxId = computed(() => {
       let pathSlice = wxPath.value.split("\\")
@@ -145,7 +210,7 @@ export default defineComponent({
     }
 
     const btnChange = () => {
-      OpenFile().then((result) => {
+      OpenFile(wxPath.value).then((result) => {
         if (result) {
           wxPath.value = result
         }
@@ -161,17 +226,41 @@ export default defineComponent({
     }
 
     const btnOpenDecDir = () => {
-      OpenDecDir(outPath.value)
+      let dir = outPath.value +wxId.value
+      OpenDecDir(dir)
+    }
+
+    const logChange = () => {
+      
+      let logtextarea = document.getElementById('logtextarea');
+      
+      if (logtextarea == null) {
+         console.log(null)
+         return
+      }
+      logtextarea.scrollTop = logtextarea.scrollHeight;
+      console.log(logtextarea.scrollTop)
+    }
+
+    const btnEmpty= () =>{
+      logger.value = ""
     }
 
     return {
       logger,
       wxId,
+      SensitiveScanFlag,
+      regx,
       outPath,
+      logRow,
+      regxs,
       wxPath,
       btnChange,
+      logChange,
       btnDecExport,
       btnOpenDecDir,
+      btnSensitiveScan,
+      btnEmpty,
       btnSelectOutPath,
     };
   },
@@ -181,5 +270,7 @@ export default defineComponent({
 
 
 <style scoped>
-
+.sensitive {
+  border: 1px dashed gray;
+}
 </style>
