@@ -5,11 +5,11 @@
 golang+wails(TS+vue3+vite+ant-design)
 
 ## 图示
-![image](https://user-images.githubusercontent.com/53891640/211708856-753a15bc-dc01-4536-821b-8c8dc6341c0a.png)
+![image](https://user-images.githubusercontent.com/53891640/212649153-d29df003-d316-4b90-a6d1-c9b2d33c47e4.png)
 
 
 ## TODO
-- [x] 敏感信息扫描
+- [] 敏感信息扫描
 
 ## 说明
 本程序仅用于学习交流，请勿用于非法用途
