@@ -5,7 +5,7 @@
 golang+wails(TS+vue3+vite+ant-design)
 
 ## 图示
-![image](https://user-images.githubusercontent.com/53891640/212649153-d29df003-d316-4b90-a6d1-c9b2d33c47e4.png)
+![image](https://user-images.githubusercontent.com/53891640/212649368-9ea3852e-14e6-4a09-8b05-94f1cc538fbb.png)
 
 
 ## TODO
