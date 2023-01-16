@@ -1,11 +1,13 @@
 package main
 
 import (
-	"IMiniCrack/pkg/util"
+	"IMiniCrack/pkg/scan"
 	"context"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"os"
 	"os/exec"
+	"os/user"
 	runtime2 "runtime"
 )
 
@@ -24,38 +26,70 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	runtime.WindowSetBackgroundColour(a.ctx, 255, 255, 255, 255)
 }
 
-func (a *App) OpenDecDir(path string) {
-	exec.Command(`cmd`, `/c`, `explorer`, path).Start()
-}
-func (a *App) OpenFile(curPath string) string {
-	//file := p.rt.Dialog.SelectFile()
-	parent := ""
-	if curPath == "" {
-		osType := runtime2.GOOS
-		switch osType {
-		case "windows":
-			parent = "C:\\"
-		case "linux":
-			parent = "/"
-		case "darwin":
-			parent = "/"
+// 保存正则信息
+func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+	_, err := scan.Sc.SaveRegex()
+	if err != nil {
+		dialog, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
+			Type:    runtime.QuestionDialog,
+			Title:   "Quit?",
+			Message: "正则保存失败，原因：" + err.Error() + ",确定要关闭么？",
+		})
+
+		if err != nil {
+			return false
 		}
-	} else {
-		parent = util.GetParentDirectory(curPath)
+		return dialog != "Yes"
+	}
+	return false
+}
 
+func (a *App) OpenDecDir(path string) string {
+	osType := runtime2.GOOS
+	curPath, err := os.Getwd()
+	if err != nil {
+		return err.Error()
+	}
+	switch osType {
+	case "windows":
+		exec.Command(`cmd`, `/c`, `explorer`, path).Start()
+	//case "linux":
+	//	dd = "/"
+	case "darwin":
+		exec.Command(`open`, curPath).Start()
+	}
+	return ""
+}
+
+func (a *App) OpenWxPackDir(curPath string) string {
+	//file := p.rt.Dialog.SelectFile()
+	//curPath, err := os.Getwd()
+	user, err := user.Current()
+	if err != nil {
+		return "OpenWxPackDir" + err.Error()
+	}
+	if err != nil {
+		return err.Error()
 	}
 
-	file, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title:            "Select File",
-		DefaultDirectory: parent,
-		Filters: []runtime.FileFilter{
-			{
-				DisplayName: "wxpack (*.wxapkg)",
-				Pattern:     "*.wxapkg",
-			},
-		},
+	wxPath := ""
+
+	osType := runtime2.GOOS
+	switch osType {
+	case "windows":
+		wxPath = user.HomeDir + "\\Documents\\WeChat Files\\Applet"
+	case "linux":
+		wxPath = user.HomeDir
+	case "darwin":
+		wxPath = user.HomeDir
+	}
+
+	file, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Select wxpack Dir",
+		DefaultDirectory: wxPath,
 	})
 	if err != nil {
 		panic(err)
@@ -63,17 +97,30 @@ func (a *App) OpenFile(curPath string) string {
 	return file
 }
 
+func (a *App) GetDefaultOutPath() string {
+	user, err := user.Current()
+	if err != nil {
+		return "OpenWxPackDir" + err.Error()
+	}
+
+	return user.HomeDir + "\\Documents"
+}
+
 func (a *App) OpenDir() string {
 
+	user, err := user.Current()
+	if err != nil {
+		return "OpenWxPackDir" + err.Error()
+	}
 	dd := ""
 	osType := runtime2.GOOS
 	switch osType {
 	case "windows":
-		dd = "C:\\"
+		dd = user.HomeDir + "\\Documents"
 	case "linux":
-		dd = "/"
+		dd = user.HomeDir
 	case "darwin":
-		dd = "/"
+		dd = user.HomeDir
 	}
 	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "Select Directory",
@@ -85,8 +132,30 @@ func (a *App) OpenDir() string {
 	return dir
 }
 
-// WailsInit assigns the runtime to the PortfallOS struct
+func (a *App) OpenScanDir(path string) string {
+	if path == "" {
+		osType := runtime2.GOOS
+		switch osType {
+		case "windows":
+			path = "C:\\"
+		case "linux":
+			path = "/"
+		case "darwin":
+			path = "/"
+		}
+	}
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Select Directory",
+		DefaultDirectory: path,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return dir
+}
+
 func (p *App) WailsInit(runtime *wails.Runtime) error {
 	p.rt = runtime
+
 	return nil
 }

@@ -3,9 +3,11 @@ module IMiniCrack
 go 1.18
 
 require (
+	github.com/dlclark/regexp2 v1.7.0
 	github.com/wailsapp/wails v1.16.9
 	github.com/wailsapp/wails/v2 v2.3.1
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	gopkg.in/yaml.v2 v2.3.0
 )
 
 require (

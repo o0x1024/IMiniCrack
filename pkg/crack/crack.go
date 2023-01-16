@@ -1,6 +1,7 @@
 package crack
 
 import (
+	"IMiniCrack/pkg/scan"
 	"IMiniCrack/pkg/util"
 	"bytes"
 	"context"
@@ -9,12 +10,14 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/crypto/pbkdf2"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -36,12 +39,19 @@ type SliceFile struct {
 	Data string
 }
 
+type PackList struct {
+	File string
+	data []byte
+}
+
 func (c *Crack) GetCtx(ctx context.Context) {
 	c.ctx = ctx
+	scan.Sc.Ctx = ctx
 }
 
 // WailsInit .
 func (c *Crack) WailsInit(runtime *wails.Runtime) error {
+	fmt.Println("Crack WailsInit")
 	c.log = c.rt.Log.New("Crack")
 	c.rt = runtime
 	return nil
@@ -52,47 +62,77 @@ func (c *Crack) Unpack(wxpkgPath, wxid, outPath string) string {
 		return "参数为空"
 	}
 	//c.log.Info("123123123")
-	decData, err := c.decWxApkg(wxpkgPath, wxid)
+	packlist, err := c.decWxApkg(wxpkgPath, wxid)
 	if err != nil {
-		return err.Error()
+		return "解密失败：" + err.Error()
 	}
-	err = c.unPackFile(wxpkgPath, decData, outPath, wxid)
-	if err != nil {
-		return err.Error()
+
+	//fmt.Println(len(packlist))
+	for _, v := range packlist {
+		//fmt.Println(v, "    ", len(v.data))
+		err = c.unPackFile(v.File, v.data, outPath)
+		if err != nil {
+			return "解密失败：" + err.Error()
+		}
 	}
 
 	return "解密导出成功"
 }
 
-func (c *Crack) decWxApkg(wxapkgPath string, wxid string) ([]byte, error) {
+func (c *Crack) decWxApkg(wxapkgPath string, wxid string) ([]PackList, error) {
 	salt := "saltiest"
 	iv := "the iv: 16 bytes"
-	dataByte, err := os.ReadFile(wxapkgPath)
+
+	//files, _ := os.ReadDir(wxapkgPath)
+	haveWxapkg := false
+	packList := []PackList{}
+	err := filepath.Walk(wxapkgPath, func(path string, info os.FileInfo, err error) error {
+		if strings.Contains(path, "wxapkg") {
+			haveWxapkg = true
+		}
+		if !info.IsDir() && strings.Contains(path, "wxapkg") {
+			pack := PackList{}
+			pack.File = path
+
+			originData := make([]byte, 1024)
+
+			dataByte, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			dk := pbkdf2.Key([]byte(wxid), []byte(salt), 1000, 32, sha1.New)
+			block, _ := aes.NewCipher(dk)
+			blockMode := cipher.NewCBCDecrypter(block, []byte(iv))
+
+			blockMode.CryptBlocks(originData, dataByte[6:1024+6])
+
+			afData := make([]byte, len(dataByte)-1024-6)
+			var xorKey = byte(0x66)
+			if len(wxid) >= 2 {
+				xorKey = wxid[len(wxid)-2]
+			}
+			for i, b := range dataByte[1024+6:] {
+				afData[i] = b ^ xorKey
+			}
+
+			originData = append(originData[:1023], afData...)
+			pack.data = originData
+			packList = append(packList, pack)
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	dk := pbkdf2.Key([]byte(wxid), []byte(salt), 1000, 32, sha1.New)
-	block, _ := aes.NewCipher(dk)
-	blockMode := cipher.NewCBCDecrypter(block, []byte(iv))
-	originData := make([]byte, 1024)
-	blockMode.CryptBlocks(originData, dataByte[6:1024+6])
-
-	afData := make([]byte, len(dataByte)-1024-6)
-	var xorKey = byte(0x66)
-	if len(wxid) >= 2 {
-		xorKey = wxid[len(wxid)-2]
-	}
-	for i, b := range dataByte[1024+6:] {
-		afData[i] = b ^ xorKey
+	if !haveWxapkg {
+		return nil, errors.New("无小程序包")
 	}
 
-	originData = append(originData[:1023], afData...)
-
-	return originData, nil
+	return packList, nil
 }
 
-func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string, wxid string) error {
+func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error {
 
 	//fmt.Println(wxapkgPath)
 	wxPackName := util.GetFileName(wxapkgPath)
@@ -162,9 +202,10 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string, wxid 
 	nameList := []string{}
 	for _, v := range fileList {
 		outFileName := v.Name
-		outFilePath := outRoot + "\\" + wxid + "\\" + wxPackName + "\\" + outFileName
-		nameList = append(nameList, outFilePath)
+		outFilePath := outRoot + "\\" + wxPackName + "\\" + outFileName
+		//fmt.Println(outFilePath)
 
+		nameList = append(nameList, outFilePath)
 		parentDir := util.GetParentDirectory(outFilePath)
 		if !util.PathExists(parentDir) {
 			err := os.MkdirAll(parentDir, 0666)
@@ -218,7 +259,7 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string, wxid 
 	}
 
 	for _, sfile := range sliceList {
-		outFilePath := outRoot + "\\" + wxid + "\\" + wxPackName + "\\" + sfile.Name
+		outFilePath := outRoot + "\\" + wxPackName + "\\" + sfile.Name
 
 		parentDir := util.GetParentDirectory(outFilePath)
 		if !util.PathExists(parentDir) {

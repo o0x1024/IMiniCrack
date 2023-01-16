@@ -1,19 +1,15 @@
-# README
+## 前言
+开发此程序的初衷是，市面上类似的工具都是命令行的，对本人来说用起来不爽，而且比如：python ,nodejs运行条件较为苛刻，环境配置麻烦，综上开发起程序。
 
-## About
+## 技术栈
+golang+wails(TS+vue3+vite+ant-design)
 
-This is the official Wails Vue-TS template.
+## 图示
+![image](https://user-images.githubusercontent.com/53891640/211708856-753a15bc-dc01-4536-821b-8c8dc6341c0a.png)
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
 
-## Live Development
+## TODO
+- [x] 敏感信息扫描
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
-
-## Building
-
-To build a redistributable, production mode package, use `wails build`.
+## 说明
+本程序仅用于学习交流，请勿用于非法用途
