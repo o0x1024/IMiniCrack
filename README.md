@@ -10,7 +10,7 @@
 golang+wails(TS+vue3+vite+ant-design)
 
 ## 图示
-![image](https://user-images.githubusercontent.com/53891640/212649368-9ea3852e-14e6-4a09-8b05-94f1cc538fbb.png)
+![image](https://user-images.githubusercontent.com/53891640/212649972-975d2466-24f9-4e4a-a7ed-42d5242e412c.png)
 
 
 ## 说明
