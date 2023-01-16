@@ -9,7 +9,7 @@ golang+wails(TS+vue3+vite+ant-design)
 
 
 ## TODO
-- [] 敏感信息扫描
+- [ ] 敏感信息扫描
 
 ## 说明
 本程序仅用于学习交流，请勿用于非法用途
