@@ -151,23 +151,27 @@
                             </a-tooltip>
                           </a-col>
                         </a-row>
-
-
                       </template>
                     </template>
                   </a-table>
-
                   <!-- <a-textarea v-model:value="regexs" placeholder="regx set" allow-clear :rows="4" /> -->
                 </a-col>
               </a-row>
             </a-col>
-
           </a-row>
         </div>
       </a-col>
-
     </a-row>
 
+    <a-row v-if="SensitiveScanFlag" style="margin-top: 10px;">
+      <a-col style="padding: 5px;">
+        <span>筛选:</span>
+      </a-col>
+      <a-col>
+      <a-select v-model:value="SelectValue" show-search placeholder="Select a person" style="width: 150px" :options="options"
+        :filter-option="filterOption" @focus="handleFocus" @blur="handleBlur" @change="handleChange"></a-select>
+      </a-col>
+    </a-row>
 
     <a-row style="margin-top: 10px;">
       <a-col :span="24">
@@ -187,7 +191,6 @@
           <span>描述：</span>
         </a-col>
         <a-col>
-
           <a-col :span="20">
             <a-input v-model:value="curEditDesc" placeholder="描述" />
           </a-col>
@@ -219,6 +222,7 @@ import { EventsOn } from "../../wailsjs/runtime/runtime"
 import { InboxOutlined, UploadOutlined, SearchOutlined, DeleteOutlined, SaveOutlined, EditOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { defineComponent, ref } from 'vue';
+import type { SelectProps } from 'ant-design-vue';
 
 
 const columns = [
@@ -258,10 +262,30 @@ export default defineComponent({
     let regexs = ref('')
     let outPath = ref('')
     let scanPath = ref('c:\\')
+    let SelectValue = ('')
     let logRow = ref(25)
     let logger = ref('')
     let defaultOutPath = ""
     let SensitiveScanFlag = ref(false)
+
+    const options = ref<SelectProps['options']>([
+      { value: 'jack', label: 'Jack' },
+      { value: 'lucy', label: 'Lucy' },
+      { value: 'tom', label: 'Tom' },
+    ]);
+
+    const handleChange = (value: string) => {
+      console.log(`selected ${value}`);
+    };
+    const handleBlur = () => {
+      console.log('blur');
+    };
+    const handleFocus = () => {
+      console.log('focus');
+    };
+    const filterOption = (input: string, option: any) => {
+      return option.value.toLowerCase().indexOf(input.toLowerCase()) >= 0;
+    };
 
 
     onMounted(() => {
@@ -294,8 +318,6 @@ export default defineComponent({
       })
 
     })
-
-
 
     const btnSensitiveScan = () => {
       SensitiveScanFlag.value = !SensitiveScanFlag.value
@@ -452,7 +474,9 @@ export default defineComponent({
       wxId,
       SensitiveScanFlag,
       regex,
+      options,
       logHeigth,
+      SelectValue,
       outPath,
       columns,
       logRow,
@@ -464,6 +488,10 @@ export default defineComponent({
       curEditReg,
       wxPath,
       editRegVisible,
+      filterOption,
+      handleBlur,
+      handleFocus,
+      handleChange,
       btnAddRegex,
       btnScan,
       btnEditRegex,

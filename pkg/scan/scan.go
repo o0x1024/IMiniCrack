@@ -5,15 +5,16 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/dlclark/regexp2"
-	"github.com/wailsapp/wails"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"gopkg.in/yaml.v2"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/dlclark/regexp2"
+	"github.com/wailsapp/wails"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"gopkg.in/yaml.v2"
 )
 
 var Sc *Scan
@@ -28,6 +29,13 @@ type Scan struct {
 	Result []string
 	rt     *wails.Runtime
 	Ctx    context.Context
+}
+
+type Sensitive struct {
+	Desc     string
+	MatchStr string
+	LineNo   string
+	Path     string
 }
 
 type regx struct {
@@ -128,11 +136,13 @@ func (s *Scan) FindSensitiveInfo(content string) (string, string, error) {
 	return "", "", nil
 }
 
-func (s *Scan) ScanSensitive(path string) string {
+func (s *Scan) ScanSensitive(path string) ([]Sensitive, string) {
 
 	if path == "c:\\" {
-		return "请检查待扫描目录是否正确"
+		return nil, "请检查待扫描目录是否正确"
 	}
+
+	sensitives := []Sensitive{}
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			fp, err := os.OpenFile(path, os.O_RDWR, 0666)
@@ -148,7 +158,13 @@ func (s *Scan) ScanSensitive(path string) string {
 					}
 
 					if matchStr != "" {
+						sensitive := Sensitive{}
 						matchStr = strings.Replace(matchStr, "\n", "", -1)
+						sensitive.Desc = desc
+						sensitive.MatchStr = matchStr
+						no := strconv.Itoa(lineNo)
+						sensitive.LineNo = no
+						sensitive.Path = path
 						result := fmt.Sprintf("%s | %s | line: %d |  %s", desc, matchStr, lineNo, path)
 						//fmt.Println(result)
 
@@ -162,10 +178,10 @@ func (s *Scan) ScanSensitive(path string) string {
 		return nil
 	})
 	if err != nil {
-		return err.Error()
+		return nil, err.Error()
 	}
 
-	return "扫描结束"
+	return sensitives, "扫描结束"
 }
 
 func checkError(err error) {
