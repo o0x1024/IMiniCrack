@@ -100,7 +100,7 @@ func (c *Crack) Unpack(wxpkgPath, wxid, outPath string) (resp model.Response) {
 	}
 
 	for _, v := range packlist {
-		tpath := ""
+		tpath := outPath
 		if wxid == "" {
 			tpath = outPath + "\\" + v.WxId
 		}
