@@ -1,6 +1,8 @@
 package crack
 
 import (
+	"IMiniCrack/pkg/jsbeautifier/jsbeautifier"
+	"IMiniCrack/pkg/model"
 	"IMiniCrack/pkg/scan"
 	"IMiniCrack/pkg/util"
 	"bytes"
@@ -15,9 +17,9 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/crypto/pbkdf2"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -41,6 +43,7 @@ type SliceFile struct {
 
 type PackList struct {
 	File string
+	WxId string
 	data []byte
 }
 
@@ -57,50 +60,96 @@ func (c *Crack) WailsInit(runtime *wails.Runtime) error {
 	return nil
 }
 
-func (c *Crack) Unpack(wxpkgPath, wxid, outPath string) string {
-	if wxpkgPath == "" || wxid == "" {
-		return "参数为空"
+func (c *Crack) GetFileList(outpath string) (resp model.Response) {
+	var pList []string
+	err := filepath.Walk(outpath, func(path string, info os.FileInfo, err error) error {
+
+		if !info.IsDir() {
+			pList = append(pList, path)
+		}
+
+		return nil
+	})
+	if pList != nil {
+		resp.FileList = pList
 	}
-	//c.log.Info("123123123")
+	if err != nil {
+		resp.Err = err.Error()
+		return resp
+	}
+	return resp
+}
+
+func (c *Crack) Unpack(wxpkgPath, wxid, outPath string) (resp model.Response) {
+	if wxpkgPath == "" {
+		resp.Err = "参数为空"
+		return resp
+	}
+	//f, err := os.OpenFile("d:\\profile", os.O_CREATE|os.O_RDWR, 0666)
+	//if err != nil {
+	//	resp.Err = "pprof error"
+	//	return resp
+	//}
+	//pprof.StartCPUProfile(f)
+
 	packlist, err := c.decWxApkg(wxpkgPath, wxid)
 	if err != nil {
-		return "解密失败：" + err.Error()
+		resp.Err = "解密失败,decWxApkg：" + err.Error()
+		runtime.EventsEmit(c.ctx, "log", "解密失败,decWxApkg："+err.Error())
+		return resp
 	}
 
-	//fmt.Println(len(packlist))
 	for _, v := range packlist {
-		//fmt.Println(v, "    ", len(v.data))
-		err = c.unPackFile(v.File, v.data, outPath)
+		tpath := ""
+		if wxid == "" {
+			tpath = outPath + "\\" + v.WxId
+		}
+		err = c.unPackFile(v.File, v.data, tpath)
 		if err != nil {
-			return "解密失败：" + err.Error()
+			resp.Err = "解密失败,unPackFile：" + err.Error()
+			runtime.EventsEmit(c.ctx, "log", "解密失败,unPackFile："+err.Error())
+			return resp
 		}
 	}
 
-	return "解密导出成功"
+	//pprof.StopCPUProfile()
+	resp.Msg = "解密导出成功"
+	return resp
 }
 
 func (c *Crack) decWxApkg(wxapkgPath string, wxid string) ([]PackList, error) {
 	salt := "saltiest"
 	iv := "the iv: 16 bytes"
-
 	//files, _ := os.ReadDir(wxapkgPath)
 	haveWxapkg := false
 	packList := []PackList{}
 	err := filepath.Walk(wxapkgPath, func(path string, info os.FileInfo, err error) error {
+		_wxid := ""
 		if strings.Contains(path, "wxapkg") {
 			haveWxapkg = true
 		}
 		if !info.IsDir() && strings.Contains(path, "wxapkg") {
+			if wxid == "" {
+				reg := regexp.MustCompile(`(?m)\\(wx\w+)\\`)
+				wxids := reg.FindAllStringSubmatch(path, -1)
+				if len(wxids) <= 0 {
+					return nil
+				}
+				_wxid = wxids[0][1]
+			} else {
+				_wxid = wxid
+			}
+
+			//fmt.Println("i:", _wxid, "path:", path)
+
 			pack := PackList{}
 			pack.File = path
-
 			originData := make([]byte, 1024)
-
 			dataByte, err := os.ReadFile(path)
 			if err != nil {
 				return err
 			}
-			dk := pbkdf2.Key([]byte(wxid), []byte(salt), 1000, 32, sha1.New)
+			dk := pbkdf2.Key([]byte(_wxid), []byte(salt), 1000, 32, sha1.New)
 			block, _ := aes.NewCipher(dk)
 			blockMode := cipher.NewCBCDecrypter(block, []byte(iv))
 
@@ -108,8 +157,8 @@ func (c *Crack) decWxApkg(wxapkgPath string, wxid string) ([]PackList, error) {
 
 			afData := make([]byte, len(dataByte)-1024-6)
 			var xorKey = byte(0x66)
-			if len(wxid) >= 2 {
-				xorKey = wxid[len(wxid)-2]
+			if len(_wxid) >= 2 {
+				xorKey = _wxid[len(_wxid)-2]
 			}
 			for i, b := range dataByte[1024+6:] {
 				afData[i] = b ^ xorKey
@@ -117,6 +166,7 @@ func (c *Crack) decWxApkg(wxapkgPath string, wxid string) ([]PackList, error) {
 
 			originData = append(originData[:1023], afData...)
 			pack.data = originData
+			pack.WxId = _wxid
 			packList = append(packList, pack)
 		}
 
@@ -134,7 +184,6 @@ func (c *Crack) decWxApkg(wxapkgPath string, wxid string) ([]PackList, error) {
 
 func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error {
 
-	//fmt.Println(wxapkgPath)
 	wxPackName := util.GetFileName(wxapkgPath)
 	//fmt.Println()
 	r := bytes.NewReader(data)
@@ -164,9 +213,12 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error
 		return err
 	}
 	if bytes.Compare(firstMark, []byte{0xBE}) != 0 || bytes.Compare(lastMark, []byte{0xED}) != 0 {
-		log.Println("It seems that this is not a valid file or the wxid you provided is wrong")
-		return errors.New("It seems that this is not a valid file or the wxid you provided is wrong")
+
+		fmt.Println("err:", wxapkgPath)
+		fmt.Printf("err  firstMark:%x  lastMark:%x\n", firstMark, lastMark)
+		return errors.New("文件无效或wxid错误, PATH:" + wxapkgPath)
 	}
+	//fmt.Printf("firstMark:%x  lastMark:%x", firstMark, lastMark)
 
 	fileCount := make([]byte, 4)
 	_, err = r.Read(fileCount)
@@ -202,8 +254,9 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error
 	nameList := []string{}
 	for _, v := range fileList {
 		outFileName := v.Name
+		fmt.Println("outRoot:", outRoot, "wxPackName:", wxPackName, "outFileName:", outFileName)
 		outFilePath := outRoot + "\\" + wxPackName + "\\" + outFileName
-		//fmt.Println(outFilePath)
+		//fmt.Println("outFilePath:", outFilePath)
 
 		nameList = append(nameList, outFilePath)
 		parentDir := util.GetParentDirectory(outFilePath)
@@ -216,6 +269,7 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error
 
 		out, err := os.OpenFile(outFilePath, os.O_CREATE|os.O_RDWR, 0666)
 		if err != nil {
+			fmt.Println("------")
 			return err
 		}
 
@@ -224,7 +278,16 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error
 		r.Seek(int64(v.Offset), 0)
 		buf := make([]byte, v.Size)
 		r.Read(buf)
-		out.Write(buf)
+		str := string(buf)
+
+		options := jsbeautifier.DefaultOptions()
+		fbuf, err := jsbeautifier.Beautify(&str, options)
+		//fbuf, err := jsbeautifier.Beautify(&str, optargs.MapType{"indent_size": 2, "space_in_empty_paren": true})
+		if err != nil {
+			return err
+		}
+
+		out.WriteString(fbuf)
 		out.Close()
 	}
 
@@ -232,6 +295,7 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error
 	for _, v := range nameList {
 		if strings.Contains(v, "app-service.js") {
 			appServiceJsPath = v
+			break
 		}
 	}
 	//fix js
@@ -259,22 +323,32 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error
 	}
 
 	for _, sfile := range sliceList {
-		outFilePath := outRoot + "\\" + wxPackName + "\\" + sfile.Name
+		if !strings.Contains(sfile.Name, ".png") || !strings.Contains(sfile.Name, ".jpg") {
 
-		parentDir := util.GetParentDirectory(outFilePath)
-		if !util.PathExists(parentDir) {
-			err := os.MkdirAll(parentDir, 0666)
+			outFilePath := outRoot + "\\" + wxPackName + "\\" + sfile.Name
+
+			parentDir := util.GetParentDirectory(outFilePath)
+			if !util.PathExists(parentDir) {
+				err := os.MkdirAll(parentDir, 0666)
+				if err != nil {
+					return err
+				}
+			}
+
+			out, err := os.OpenFile(outFilePath, os.O_CREATE|os.O_RDWR, 0666)
 			if err != nil {
 				return err
 			}
-		}
+			options := jsbeautifier.DefaultOptions()
+			fbuf, err := jsbeautifier.Beautify(&sfile.Data, options)
+			if err != nil {
+				return err
+			}
 
-		out, err := os.OpenFile(outFilePath, os.O_CREATE|os.O_RDWR, 0666)
-		if err != nil {
-			return err
+			out.WriteString(fbuf)
+			out.Close()
 		}
-		out.WriteString(sfile.Data)
-		out.Close()
 	}
+	fmt.Println("end")
 	return nil
 }

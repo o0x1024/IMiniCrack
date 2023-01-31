@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"IMiniCrack/pkg/model"
 	"IMiniCrack/pkg/util"
 	"bufio"
 	"context"
@@ -10,6 +11,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/dlclark/regexp2"
 	"github.com/wailsapp/wails"
@@ -24,33 +27,27 @@ func init() {
 	Sc.Init()
 }
 
+var pathCh = make(chan string, 100)
+
 type Scan struct {
-	Regx   []regx `yaml:"regx"`
-	Result []string
-	rt     *wails.Runtime
-	Ctx    context.Context
-}
-
-type Sensitive struct {
-	Desc     string
-	MatchStr string
-	LineNo   string
-	Path     string
-}
-
-type regx struct {
-	Id     string `yaml:"id"`
-	Desc   string `yaml:"desc"`
-	Record string `yaml:"record"` //正则
+	Regex       []model.Regex `yaml:"regx"`
+	Result      []string
+	rt          *wails.Runtime
+	Ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	Sensitives  []model.Sensitive
+	threadCount int
+	taskStatus  bool
 }
 
 func (s *Scan) SaveResult(content string) string {
-	user, err := user.Current()
+	ur, err := user.Current()
 	if err != nil {
 		return err.Error()
 	}
 	path, err := runtime.SaveFileDialog(s.Ctx, runtime.SaveDialogOptions{
-		DefaultDirectory: user.HomeDir + "\\Documents",
+		DefaultDirectory: ur.HomeDir + "\\Documents",
 		Title:            "save result",
 		DefaultFilename:  "result.txt",
 	})
@@ -106,82 +103,148 @@ func (s *Scan) FindSensitiveInfo(content string) (string, string, error) {
 
 	color := []string{"red", "blue", "orange", "magenta", "chocolate", "pink", "copper", "thistle", "khaki", "seagreen", "lightslategray", "firebrick"}
 	var matches []string
-	for _, v := range s.Regx {
-
-		tmpreg, err := regexp2.Compile(v.Record, 0)
-		if err != nil {
-			return "", "", err
-		}
-		m, err := tmpreg.FindStringMatch(content)
-		if err != nil {
-			return "", "", err
-		}
-		for m != nil {
-			matches = append(matches, m.String())
-			m, _ = tmpreg.FindNextMatch(m)
-		}
-		if matches != nil {
-			allstr := ""
-			for i, v := range matches {
-				if i >= len(color) {
-					allstr += " <span style=\"color: red;\">" + v + "</span>"
-				} else {
-					allstr += " <span style=\"color: " + color[i] + ";\">" + v + "</span>"
-				}
+	for _, v := range s.Regex {
+		if v.Status {
+			tmpreg, err := regexp2.Compile(v.Record, 0)
+			if err != nil {
+				return "", "", err
 			}
-			return allstr, v.Desc, nil
+			m, err := tmpreg.FindStringMatch(content)
+			if err != nil {
+				return "", "", err
+			}
+			for m != nil {
+				matches = append(matches, m.String())
+				m, _ = tmpreg.FindNextMatch(m)
+			}
+			if matches != nil {
+				allstr := ""
+				for i, v := range matches {
+					if i >= len(color) {
+						allstr += " <span style=\"color: red;\">" + v + "</span>"
+					} else {
+						allstr += " <span style=\"color: " + color[i] + ";\">" + v + "</span>"
+					}
+				}
+				return allstr, v.Desc, nil
+			}
 		}
-
 	}
 	return "", "", nil
 }
 
-func (s *Scan) ScanSensitive(path string) ([]Sensitive, string) {
+func (s *Scan) scanWork(ctx context.Context) {
 
-	if path == "c:\\" {
-		return nil, "请检查待扫描目录是否正确"
-	}
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("done")
+			s.threadCount--
+			s.wg.Done()
+			return
+		case path, ok := <-pathCh:
+			if !ok {
+				s.threadCount--
+				s.wg.Done()
+				return
+			} else {
+				fp, err := os.OpenFile(path, os.O_RDWR, 0666)
+				if err == nil {
+					scanner := bufio.NewScanner(fp)
+					var lineNo int = 0
+					for scanner.Scan() {
+						lineNo++
+						text := scanner.Text()
+						matchStr, desc, err := s.FindSensitiveInfo(text)
+						if err != nil {
+							runtime.EventsEmit(s.Ctx, "scan_dis", err.Error())
+							return
+						}
 
-	sensitives := []Sensitive{}
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			fp, err := os.OpenFile(path, os.O_RDWR, 0666)
-			if err == nil {
-				scanner := bufio.NewScanner(fp)
-				var lineNo int = 0
-				for scanner.Scan() {
-					lineNo++
-					text := scanner.Text()
-					matchStr, desc, err := s.FindSensitiveInfo(text)
-					if err != nil {
-						return err
-					}
-
-					if matchStr != "" {
-						sensitive := Sensitive{}
-						matchStr = strings.Replace(matchStr, "\n", "", -1)
-						sensitive.Desc = desc
-						sensitive.MatchStr = matchStr
-						no := strconv.Itoa(lineNo)
-						sensitive.LineNo = no
-						sensitive.Path = path
-						result := fmt.Sprintf("%s | %s | line: %d |  %s", desc, matchStr, lineNo, path)
-						//fmt.Println(result)
-
-						s.Result = append(s.Result, result)
-						runtime.EventsEmit(s.Ctx, "scan", result)
+						if matchStr != "" {
+							sensitive := model.Sensitive{}
+							matchStr = strings.Replace(matchStr, "\n", "", -1)
+							sensitive.Desc = desc
+							sensitive.MatchStr = matchStr
+							no := strconv.Itoa(lineNo)
+							sensitive.LineNo = no
+							sensitive.Path = path
+							result := fmt.Sprintf("%s | %s | line: %d |  <a>%s</a>", desc, matchStr, lineNo, path)
+							//fmt.Println(result)
+							s.Sensitives = append(s.Sensitives, sensitive)
+							s.Result = append(s.Result, result)
+							runtime.EventsEmit(s.Ctx, "scan", sensitive)
+							runtime.EventsEmit(s.Ctx, "scan_dis", result)
+						}
 					}
 				}
 			}
-			fp.Close()
+		}
+	}
+}
+
+func (s *Scan) StopScan() string {
+	s.taskStatus = false
+	s.cancel()
+
+	tick := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-tick.C:
+			if s.threadCount <= 0 {
+				runtime.EventsEmit(s.Ctx, "scan_dis", "停止扫描")
+				return "停止扫描"
+			}
+		}
+	}
+
+}
+
+func (s *Scan) ScanSensitive(path string) (resp model.Response) {
+
+	if path == "c:\\" {
+		resp.Err = "请检查待扫描目录是否正确"
+		return resp
+	}
+	s.taskStatus = true
+	s.Sensitives = nil
+	pathCh = make(chan string, 5)
+	var FileList []string
+
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			FileList = append(FileList, path)
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err.Error()
+		resp.Err = err.Error()
+		return resp
 	}
 
-	return sensitives, "扫描结束"
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+
+	for i := 0; i < 20; i++ {
+		s.wg.Add(1)
+		go s.scanWork(ctx)
+	}
+	//按线程对文件进行扫描
+	for _, v := range FileList {
+		if s.taskStatus {
+			pathCh <- v
+		} else {
+			break
+		}
+	}
+	fmt.Println("close")
+	close(pathCh)
+
+	s.wg.Wait()
+	resp.Sensitives = s.Sensitives
+	resp.Msg = "扫描完成"
+	return resp
+
 }
 
 func checkError(err error) {
@@ -199,107 +262,133 @@ func (s *Scan) WailsInit(runtime *wails.Runtime) error {
 	return nil
 }
 
-func (s *Scan) SaveRegex() (string, error) {
-	user, err := user.Current()
+func (s *Scan) SaveRegex() (resp model.Response) {
+	usr, err := user.Current()
 	if err != nil {
-		return "", err
+		resp.Err = err.Error()
+		return resp
 	}
-	yamlPath := user.HomeDir + "\\.iminicrack\\scan.yaml"
-	data, err := yaml.Marshal(s.Regx)
+	yamlPath := usr.HomeDir + "\\.iminicrack\\scan.yaml"
+	data, err := yaml.Marshal(s.Regex)
 	if err != nil {
-		return "", err
+		resp.Err = err.Error()
+		return resp
 	}
 	err = os.WriteFile(yamlPath, data, 0777)
 	if err != nil {
-		return "", err
+		resp.Err = err.Error()
+		return resp
 	}
-	return "保存成功", nil
+	resp.Msg = "保存成功"
+	return resp
 }
 
 func (s *Scan) DelRegex(Id string) {
-	newRegx := []regx{}
-	for _, v := range s.Regx {
+	newRegx := []model.Regex{}
+	for _, v := range s.Regex {
 		if v.Id != Id {
 			newRegx = append(newRegx, v)
 		}
 	}
 	//fmt.Println(newRegx)
-	s.Regx = newRegx
+	s.Regex = newRegx
 }
 
 func (s *Scan) AddRegex(regexString string, desc string) {
-	newId := len(s.Regx) + 1
+	curId, _ := strconv.Atoi(s.Regex[len(s.Regex)-1].Id)
+	newId := curId + 1
 	n := strconv.Itoa(newId)
-	regex := regx{
+	regex := model.Regex{
 		Id:     n,
 		Record: regexString,
 		Desc:   desc,
 	}
 	fmt.Println(regex)
-	s.Regx = append(s.Regx, regex)
+	s.Regex = append(s.Regex, regex)
 
 	//fmt.Println(s.Regx)
 }
 
 func (s *Scan) UpdateRegex(id, desc, record string) {
 
-	for i, v := range s.Regx {
+	for i, v := range s.Regex {
 		if v.Id == id {
-			s.Regx[i].Desc = desc
-			s.Regx[i].Record = record
+			s.Regex[i].Desc = desc
+			s.Regex[i].Record = record
 			//fmt.Println(s.Regx)
 			return
 		}
 	}
-
 }
 
-func (s Scan) GetRegx() interface{} {
-	return s.Regx
+func (s Scan) ChangeRegexStatus(id string) (resp model.Response) {
+	var haveId = false
+	for i, v := range s.Regex {
+		if v.Id == id {
+			s.Regex[i].Status = !s.Regex[i].Status
+			haveId = true
+			break
+		}
+	}
+	if haveId {
+		resp.Msg = "已更新"
+		return resp
+	}
+	resp.Err = "数据错误"
+	return resp
+}
+
+func (s Scan) GetRegx() (resp model.Response) {
+	if s.Regex == nil {
+		resp.Err = "初始化正则失败或无正则"
+	} else {
+		resp.Regexs = s.Regex
+	}
+	return resp
 }
 
 func (s *Scan) Init() {
 	fmt.Println(" scan WailsInit")
-	user, err := user.Current()
+	s.threadCount = 20
+	usr, err := user.Current()
 	checkError(err)
 
-	iminiPath := user.HomeDir + "\\.iminicrack"
+	iminiPath := usr.HomeDir + "\\.iminicrack"
 	if !util.PathExists(iminiPath) {
-		//fmt.Println(iminiPath)
 		err = os.Mkdir(iminiPath, 0666)
 		checkError(err)
 	}
 	yamlPath := iminiPath + "\\scan.yaml"
 	if !util.PathExists(yamlPath) {
-		regs := []regx{
-			{"1", "access_key", "[Aa](ccess|CCESS)_?[Kk](ey|EY)|[Aa](ccess|CCESS)_?[sS](ecret|ECRET)|[Aa](ccess|CCESS)_?(id|ID|Id)"},
-			{"2", "OSS", "([A|a]ccess[K|k]ey[I|i][d|D]|[A|a]ccess[K|k]ey[S|s]ecret)"},
-			{"3", "phone", `[^\w]((?:(?:\+|00)86)?1(?:(?:3[\d])|(?:4[5-79])|(?:5[0-35-9])|(?:6[5-7])|(?:7[0-8])|(?:8[\d])|(?:9[189]))\d{8})[^\w]`},
-			{"4", "邮箱", `(([a-z0-9][_|\.])*[a-z0-9]+@([a-z0-9][-|_|\.])*[a-z0-9]+\.((?!js|css|jpg|jpeg|png|ico)[a-z]{2,}))`},
-			{"5", "Secret_key", "[Ss](ecret|ECRET)_?[Kk](ey|EY)"},
-			{"6", "github_access_token", `[a-zA-Z0-9_-]*:[a-zA-Z0-9_\\-]+@github\\.com*`},
-			{"7", "JWT", `(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9._-]{10,}|eyJ[A-Za-z0-9_\/+-]{10,}\.[A-Za-z0-9._\/+-]{10,})`},
-			{"8", "Swagger UI", `((swagger-ui.html)|(\"swagger\":)|(Swagger UI)|(swaggerUi))`},
-			{"9", "身份证", `[^0-9]((\d{8}(0\d|10|11|12)([0-2]\d|30|31)\d{3}$)|(\d{6}(18|19|20)\d{2}(0[1-9]|10|11|12)([0-2]\d|30|31)\d{3}(\d|X|x)))[^0-9]`},
-			{"10", "RCE参数", "((cmd=)|(exec=)|(command=)|(execute=)|(ping=)|(query=)|(jump=)|(code=)|(reg=)|(do=)|(func=)|(arg=)|(option=)|(load=)|(process=)|(step=)|(read=)|(function=)|(feature=)|(exe=)|(module=)|(payload=)|(run=)|(daemon=)|(upload=)|(dir=)|(download=)|(log=)|(ip=)|(cli=))"},
+		regs := []model.Regex{
+			{"1", "access_key", "[Aa](ccess|CCESS)_?[Kk](ey|EY)|[Aa](ccess|CCESS)_?[sS](ecret|ECRET)|[Aa](ccess|CCESS)_?(id|ID|Id)", true},
+			{"2", "OSS", "([A|a]ccess[K|k]ey[I|i][d|D]|[A|a]ccess[K|k]ey[S|s]ecret)", true},
+			{"3", "phone", `[^\w]((?:(?:\+|00)86)?1(?:(?:3[\d])|(?:4[5-79])|(?:5[0-35-9])|(?:6[5-7])|(?:7[0-8])|(?:8[\d])|(?:9[189]))\d{8})[^\w]`, true},
+			{"4", "邮箱", `(([a-z0-9][_|\.])*[a-z0-9]+@([a-z0-9][-|_|\.])*[a-z0-9]+\.((?!js|css|jpg|jpeg|png|ico)[a-z]{2,}))`, true},
+			{"5", "Secret_key", "[Ss](ecret|ECRET)_?[Kk](ey|EY)", true},
+			{"6", "github_access_token", `[a-zA-Z0-9_-]*:[a-zA-Z0-9_\\-]+@github\\.com*`, true},
+			{"7", "JWT", `(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9._-]{10,}|eyJ[A-Za-z0-9_\/+-]{10,}\.[A-Za-z0-9._\/+-]{10,})`, true},
+			{"8", "Swagger UI", `((swagger-ui.html)|(\"swagger\":)|(Swagger UI)|(swaggerUi))`, true},
+			{"9", "身份证", `[^0-9]((\d{8}(0\d|10|11|12)([0-2]\d|30|31)\d{3}$)|(\d{6}(18|19|20)\d{2}(0[1-9]|10|11|12)([0-2]\d|30|31)\d{3}(\d|X|x)))[^0-9]`, true},
+			{"10", "RCE参数", "((cmd=)|(exec=)|(command=)|(execute=)|(ping=)|(query=)|(jump=)|(code=)|(reg=)|(do=)|(func=)|(arg=)|(option=)|(load=)|(process=)|(step=)|(read=)|(function=)|(feature=)|(exe=)|(module=)|(payload=)|(run=)|(daemon=)|(upload=)|(dir=)|(download=)|(log=)|(ip=)|(cli=))", true},
 			//{"Amazon AWS URL", `(((([a-zA-Z0-9._-]+\.s3|s3)(\.|\-)+[a-zA-Z0-9._-]+|[a-zA-Z0-9._-]+\.s3|s3)\.amazonaws\.com)|(s3:\/\/[a-zA-Z0-9-\.\_]+)|(s3.console.aws.amazon.com\/s3\/buckets\/[a-zA-Z0-9-\.\_]+)|(amzn\.mws\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})|(ec2-[0-9-]+.cd-[a-z0-9-]+.compute.amazonaws.com)|(us[_-]?east[_-]?1[_-]?elb[_-]?amazonaws[_-]?com))`},
-			{"11", "Amazon AWS AccessKey ID", `[^0-9]((aws(.{0,20})?(?-i)[''\"][0-9a-zA-Z\/+]{40}[''\"])|((A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[a-zA-Z0-9]{16}))[^0-9]`},
-			{"12", "Amazon AWS Region", `((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d)`},
-			{"13", "Password Field", `((|'|")([p](ass|wd|asswd|assword))(|'|")(:|=)( |)('|")(.*?)('|")(|,))`},
-			{"14", "Authorization Header", `((basic [a-z0-9=:_\+\/-]{5,100})|(bearer [a-z0-9_.=:_\+\/-]{5,100}))`},
+			{"11", "Amazon AWS AccessKey ID", `[^0-9]((aws(.{0,20})?(?-i)[''\"][0-9a-zA-Z\/+]{40}[''\"])|((A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[a-zA-Z0-9]{16}))[^0-9]`, true},
+			{"12", "Amazon AWS Region", `((us(-gov)?|ap|ca|cn|eu|sa)-(central|(north|south)?(east|west)?)-\d)`, true},
+			{"13", "Password Field", `((|'|")([p](ass|wd|asswd|assword))(|'|")(:|=)( |)('|")(.*?)('|")(|,))`, true},
+			{"14", "Authorization Header", `((basic [a-z0-9=:_\+\/-]{5,100})|(bearer [a-z0-9_.=:_\+\/-]{5,100}))`, true},
 			//{"LinkFind ", `(?:"|')(((?:[a-zA-Z]{1,10}://|//)[^"'/]{1,}\.[a-zA-Z]{2,}[^"']{0,})|((?:/|\.\./|\./)[^"'><,;|*()(%%$^/\\\[\]][^"'><,;|()]{1,})|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{1,}\.(?:[a-zA-Z]{1,4}|action)(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{3,}(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-]{1,}\.(?:php|asp|aspx|jsp|json|action|html|js|txt|xml)(?:[\?|#][^"|']{0,}|)))(?:"|')`},
-			{"15", "URL", `(?:\b[a-z\d.-]+://[^<>\s]+|\b(?:(?:(?:[^\s!@#$%^&*()_=+[\]{}\|;:'",.<>/?]+)\.)+(?:ac|ad|aero|ae|af|ag|ai|al|am|an|ao|aq|arpa|ar|asia|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|cat|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|coop|com|co|cr|cu|cv|cx|cy|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|in|io|iq|ir|is|it|je|jm|jobs|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mo|mp|mq|mr|ms|mt|museum|mu|mv|mw|mx|my|mz|name|na|nc|net|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|pro|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tr|tt|tv|tw|tz|ua|ug|uk|um|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xn--0zwm56d|xn--11b5bs3a9aj6g|xn--80akhbyknj4f|xn--9t4b11yi5a|xn--deba0ad|xn--g6w251d|xn--hgbk6aj7f53bba|xn--hlcj6aya9esc7a|xn--jxalpdlp|xn--kgbechtv|xn--zckzah|ye|yt|yu|za|zm|zw)|(?:(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])\.){3}(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5]))(?:[;/][^#?<>\s]*)?(?:\?[^#<>\s]*)?(?:#[^<>\s]*)?(?!\w))`},
+			{"15", "URL", `(?:\b[a-z\d.-]+://[^<>\s]+|\b(?:(?:(?:[^\s!@#$%^&*()_=+[\]{}\|;:'",.<>/?]+)\.)+(?:ac|ad|aero|ae|af|ag|ai|al|am|an|ao|aq|arpa|ar|asia|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|cat|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|coop|com|co|cr|cu|cv|cx|cy|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|in|io|iq|ir|is|it|je|jm|jobs|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mo|mp|mq|mr|ms|mt|museum|mu|mv|mw|mx|my|mz|name|na|nc|net|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|pro|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tr|tt|tv|tw|tz|ua|ug|uk|um|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xn--0zwm56d|xn--11b5bs3a9aj6g|xn--80akhbyknj4f|xn--9t4b11yi5a|xn--deba0ad|xn--g6w251d|xn--hgbk6aj7f53bba|xn--hlcj6aya9esc7a|xn--jxalpdlp|xn--kgbechtv|xn--zckzah|ye|yt|yu|za|zm|zw)|(?:(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])\.){3}(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5]))(?:[;/][^#?<>\s]*)?(?:\?[^#<>\s]*)?(?:#[^<>\s]*)?(?!\w))`, true},
 		}
 		data, err := yaml.Marshal(regs)
 		checkError(err)
 
 		err = os.WriteFile(yamlPath, data, 0666)
 		checkError(err)
-
+		s.Regex = regs
 	} else {
 		content, err := os.ReadFile(yamlPath)
 		checkError(err)
-		err = yaml.Unmarshal(content, &s.Regx)
+		err = yaml.Unmarshal(content, &s.Regex)
 		checkError(err)
 	}
 }

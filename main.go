@@ -4,6 +4,8 @@ import (
 	"IMiniCrack/pkg/crack"
 	"IMiniCrack/pkg/scan"
 	"embed"
+	"runtime"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -15,6 +17,8 @@ var assets embed.FS
 
 func main() {
 	// Create an instance of the app structure
+
+	runtime.GOMAXPROCS(runtime.NumCPU() / 2)
 	app := NewApp()
 	c := &crack.Crack{}
 
@@ -22,7 +26,7 @@ func main() {
 	err := wails.Run(&options.App{
 		Title:  "IMiniCrack   -  gelenlen",
 		Width:  1024,
-		Height: 800,
+		Height: 860,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

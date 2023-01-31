@@ -1,6 +1,7 @@
 package main
 
 import (
+	"IMiniCrack/pkg/model"
 	"IMiniCrack/pkg/scan"
 	"context"
 	"github.com/wailsapp/wails"
@@ -25,18 +26,19 @@ func NewApp() *App {
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
+
 	a.ctx = ctx
 	runtime.WindowSetBackgroundColour(a.ctx, 255, 255, 255, 255)
 }
 
 // 保存正则信息
 func (a *App) beforeClose(ctx context.Context) (prevent bool) {
-	_, err := scan.Sc.SaveRegex()
-	if err != nil {
+	resp := scan.Sc.SaveRegex()
+	if resp.Err != "" {
 		dialog, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
 			Type:    runtime.QuestionDialog,
 			Title:   "Quit?",
-			Message: "正则保存失败，原因：" + err.Error() + ",确定要关闭么？",
+			Message: "正则保存失败，原因：" + resp.Err + ",确定要关闭么？",
 		})
 
 		if err != nil {
@@ -62,6 +64,33 @@ func (a *App) OpenDecDir(path string) string {
 		exec.Command(`open`, curPath).Start()
 	}
 	return ""
+}
+
+func (a *App) SelectOpenFile() (resp model.Response) {
+	user, _ := user.Current()
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Select Directory",
+		DefaultDirectory: user.HomeDir + "\\Documents",
+		ShowHiddenFiles:  true,
+	})
+	if err != nil {
+		resp.Err = err.Error()
+		return resp
+	}
+	resp.Data = path
+	return resp
+}
+
+func (a *App) OpenDisFile(path string) (resp model.Response) {
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		resp.Err = err.Error()
+		return resp
+	}
+
+	resp.Data = string(data)
+	return resp
 }
 
 func (a *App) OpenWxPackDir(curPath string) string {

@@ -25,11 +25,31 @@ func PathExists(path string) bool {
 }
 
 func GetParentDirectory(dirctory string) string {
-	if strings.LastIndex(dirctory, "/") == -1 {
-		return substr(dirctory, 0, strings.LastIndex(dirctory, "\\"))
-
+	lastIndex := -1
+	pathRune := []rune(dirctory)
+	for i := len(pathRune) - 1; i > 0; i-- {
+		if pathRune[i] == 47 {
+			lastIndex = i
+			break
+		}
 	}
-	return substr(dirctory, 0, strings.LastIndex(dirctory, "/"))
+
+	if lastIndex == -1 {
+		for i := len(pathRune) - 1; i > 0; i-- {
+			if pathRune[i] == 92 {
+				lastIndex = i
+				break
+			}
+		}
+	}
+
+	return string(pathRune[0:lastIndex])
+
+	//if strings.LastIndex(dirctory, "/") == -1 {
+	//	return substr(dirctory, 0, strings.LastIndex(dirctory, "\\"))
+	//
+	//}
+	//return substr(dirctory, 0, strings.LastIndex(dirctory, "/"))
 
 }
 

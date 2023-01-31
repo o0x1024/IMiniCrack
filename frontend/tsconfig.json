@@ -21,7 +21,7 @@
     "src/**/*.d.ts",
     "src/**/*.tsx",
     "src/**/*.vue"
-  ],
+, "src/lib/FileOp.js", "src/lib/FileOp.js", "src/lib/FileOp.js", "src/lib/FileOp.js"  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

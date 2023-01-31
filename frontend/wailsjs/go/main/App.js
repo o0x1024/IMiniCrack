@@ -14,12 +14,20 @@ export function OpenDir() {
   return window['go']['main']['App']['OpenDir']();
 }
 
+export function OpenDisFile(arg1) {
+  return window['go']['main']['App']['OpenDisFile'](arg1);
+}
+
 export function OpenScanDir(arg1) {
   return window['go']['main']['App']['OpenScanDir'](arg1);
 }
 
 export function OpenWxPackDir(arg1) {
   return window['go']['main']['App']['OpenWxPackDir'](arg1);
+}
+
+export function SelectOpenFile() {
+  return window['go']['main']['App']['SelectOpenFile']();
 }
 
 export function WailsInit(arg1) {

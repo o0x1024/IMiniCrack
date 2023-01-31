@@ -6,6 +6,10 @@ export function AddRegex(arg1, arg2) {
   return window['go']['scan']['Scan']['AddRegex'](arg1, arg2);
 }
 
+export function ChangeRegexStatus(arg1) {
+  return window['go']['scan']['Scan']['ChangeRegexStatus'](arg1);
+}
+
 export function DelRegex(arg1) {
   return window['go']['scan']['Scan']['DelRegex'](arg1);
 }
@@ -32,6 +36,10 @@ export function SaveResult(arg1) {
 
 export function ScanSensitive(arg1) {
   return window['go']['scan']['Scan']['ScanSensitive'](arg1);
+}
+
+export function StopScan() {
+  return window['go']['scan']['Scan']['StopScan']();
 }
 
 export function UpdateRegex(arg1, arg2, arg3) {

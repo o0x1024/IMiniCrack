@@ -24,7 +24,7 @@
         <p style="padding: 5px;">WXID：&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
       </a-col>
       <a-col>
-        <a-input v-model:value="wxId" style="width: 310px;" placeholder="路径中包含会自动识别，未识别到请手动填写" />
+        <a-input v-model:value="wxId" style="width: 320px;" placeholder="路径中包含会自动识别，扫描大目录时不用填写" />
       </a-col>
     </a-row>
 
@@ -93,15 +93,25 @@
               </a-row>
               <a-row :gutter="10">
                 <a-col>
-                  <a-button @click="btnScan" type="primary">开始扫描</a-button>
+                  <a-button @click="btnScan" type="primary" :loading="startscaning" >开始扫描</a-button>
+                </a-col>
+                <a-col>
+                  <a-button @click="btnStopScan" :loading="stopscaning" type="primary" >停止扫描</a-button>
                 </a-col>
                 <a-col>
                   <a-button @click="btnSaveRuesult" type="primary">导出结果</a-button>
                 </a-col>
+                <a-col>
+                  <a-button @click="btnDisCodeMirror" type="primary">文件浏览</a-button>
+                </a-col>
               </a-row>
-            </a-col>
 
-            <a-col :span="11">
+              <a-row :gutter="10" style="margin-top: 50px;">
+
+              </a-row>
+            </a-col>  
+
+            <a-col :span="12">
               <a-row :gutter="10">
                 <a-col>
                   <a-button @click="btnAddRegex" type="primary">添加正则</a-button>
@@ -152,6 +162,10 @@
                           </a-col>
                         </a-row>
                       </template>
+
+                      <template v-if="column.dataIndex === 'Status'">
+                        <a-switch @click="switchStatus(record.Id)" v-model:checked="record.Status" />
+                      </template>
                     </template>
                   </a-table>
                   <!-- <a-textarea v-model:value="regexs" placeholder="regx set" allow-clear :rows="4" /> -->
@@ -163,22 +177,26 @@
       </a-col>
     </a-row>
 
-    <a-row v-if="SensitiveScanFlag" style="margin-top: 10px;">
+    <a-row v-if="SensitiveScanFlag" style="margin-top: 10px;" :gutter="10">
       <a-col style="padding: 5px;">
         <span>筛选:</span>
       </a-col>
       <a-col>
-      <a-select v-model:value="SelectValue" show-search placeholder="Select a person" style="width: 150px" :options="options"
-        :filter-option="filterOption" @focus="handleFocus" @blur="handleBlur" @change="handleChange"></a-select>
+        <a-select v-model:value="SelectValue" show-search placeholder="选择筛选条件" style="width: 150px"
+          :options="selectOptions.list" :filter-option="filterOption" @change="handleChange"></a-select>
       </a-col>
+      <!-- <a-col style="padding: 5px;">
+        <a-button size="small" @click="btnDelConditionn()" type="primary">删除条件
+        </a-button>
+      </a-col> -->
     </a-row>
 
     <a-row style="margin-top: 10px;">
       <a-col :span="24">
         <!-- :disabled="true" -->
         <div
-          :style="{ 'border-style': 'solid', 'border-width': '1px', 'border-color': 'gray', 'padding': '10px', 'overflow-y': 'scroll', 'width': '100%', 'height': logHeigth + 'px' }">
-          <div v-html="logger"></div>
+          :style="{ 'border-style': 'solid', 'border-width': '1px', 'border-color': 'gray', 'padding': '10px', 'overflow-y': 'scroll', 'width': '100%', 'height': logMinHeigth + 'px' }">
+          <div v-html="logger" @click="ToCodeMirror"></div>
         </div>
         <!-- <a-textarea v-model:value="logger" id="logtextarea" :change="logChange()" placeholder="" :rows="logRow" /> -->
       </a-col>
@@ -204,43 +222,91 @@
         <a-col :span="20">
           <a-textarea v-model:value="curEditReg" placeholder="正则" auto-size />
         </a-col>
-
       </a-row>
     </a-modal>
+
+
+    <a-drawer title="文件浏览" style="text-align: left;" :width="codewidth" :visible="codevisible" @close="onCodeClose">
+
+      <a-row :gutter="10">
+        <a-col>
+          <p style="padding: 5px;">文件路径：</p>
+        </a-col>
+        <a-col>
+          <a-input-search v-model:value="disFilePath" style="width: 500px;" enter-button placeholder="选择或输入需要打开的文件路径"
+            @search="onSelectCodeFile">
+          </a-input-search>
+        </a-col>
+        <a-col>
+          <a-button @click="bntOpenCodeFile()" type="primary">打开文件</a-button>
+        </a-col>
+      </a-row>
+      <a-row>
+        <a-col :span="24">
+          <MyCodeMirror :Data="disData"></MyCodeMirror>
+        </a-col>
+      </a-row>
+    </a-drawer>
   </div>
-
-
 </template>
 
 
 <script lang="ts">
 import { computed, onMounted, reactive } from 'vue'
-import { OpenWxPackDir, OpenDir, OpenDecDir, OpenScanDir, GetDefaultOutPath } from "../../wailsjs/go/main/App"
+import { OpenWxPackDir, OpenDir, OpenDecDir, OpenScanDir, GetDefaultOutPath, SelectOpenFile, OpenDisFile } from "../../wailsjs/go/main/App"
 import { Unpack } from "../../wailsjs/go/crack/Crack"
-import { GetRegx, AddRegex, DelRegex, ScanSensitive, SaveResult, SaveRegex, UpdateRegex } from "../../wailsjs/go/scan/Scan"
+import { GetRegx, AddRegex, DelRegex, ScanSensitive, SaveResult, SaveRegex, UpdateRegex, ChangeRegexStatus, StopScan } from "../../wailsjs/go/scan/Scan"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
-import { InboxOutlined, UploadOutlined, SearchOutlined, DeleteOutlined, SaveOutlined, EditOutlined } from '@ant-design/icons-vue';
+import { InboxOutlined, UploadOutlined, SearchOutlined, DeleteOutlined, SaveOutlined, EditOutlined} from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { defineComponent, ref } from 'vue';
-import type { SelectProps } from 'ant-design-vue';
-
+import MyCodeMirror from './Editor.vue'
 
 const columns = [
   { title: 'ID', dataIndex: 'Id', key: '1', align: 'center', },
   { title: '描述', dataIndex: 'Desc', key: '2', align: 'center', },
   { title: '正则', dataIndex: 'Record', key: '3', align: 'center', ellipsis: true, },
+  { title: '状态', dataIndex: 'Status', key: '4', align: 'center', },
   { title: '操作', key: 'operation', fixed: 'right', align: 'center', },
 ]
 
-interface Regx {
+interface DelayLoading {
+  delay: number;
+}
+
+interface Regex {
   Id: string
   Record: string  //正则
   Desc: string
+  Status: boolean
+}
+
+interface option {
+  value: string
+  label: string
+}
+
+interface Sensitive {
+  Desc: string
+  MatchStr: string
+  LineNo: string
+  Path: string
+}
+
+
+interface Response {
+  Sensitives: Sensitive[]
+  Data: string
+  Err: string
+  Regexs: Regex[]
+  FileList: string[]
+  Msg: string
 }
 
 
 export default defineComponent({
   components: {
+    MyCodeMirror,
     SaveOutlined,
     DeleteOutlined,
     EditOutlined,
@@ -248,72 +314,98 @@ export default defineComponent({
     SearchOutlined,
     UploadOutlined
   },
+
   setup() {
+    let backLog = ''
     let desc = ref('')
     let wxId = ref('')
+    let disData = ref('')
+    let codewidth = ref('900px')
     let curEditReg = ref('')
     let curEditDesc = ref('')
     let CurEditId = ''
-    let logHeigth = ref('550')
+    let disFilePath = ref('')
+    let logMinHeigth = ref('610')
     let wxPath = ref('')
+    let startscaning = ref<boolean | DelayLoading>(false);
+    let stopscaning = ref<boolean | DelayLoading>(false);
+    let codevisible = ref(false)
     let regex = ref('')
     let editRegVisible = ref(false)
-    let regexdata: { list: Regx[] } = reactive({ list: [] });
+    let regexdata: { list: Regex[] } = reactive({ list: [] });
     let regexs = ref('')
     let outPath = ref('')
-    let scanPath = ref('c:\\')
-    let SelectValue = ('')
+    let scanPath = ref('')
+    let SelectValue = ref<string>()
     let logRow = ref(25)
     let logger = ref('')
     let defaultOutPath = ""
     let SensitiveScanFlag = ref(false)
+    const selectOptions: { list: option[] } = reactive({ list: [] })
+    let sensitiveResult: { list: Sensitive[] } = reactive({ list: [] });
 
-    const options = ref<SelectProps['options']>([
-      { value: 'jack', label: 'Jack' },
-      { value: 'lucy', label: 'Lucy' },
-      { value: 'tom', label: 'Tom' },
-    ]);
 
     const handleChange = (value: string) => {
-      console.log(`selected ${value}`);
+      SelectValue.value = value
+      let ses = sensitiveResult.list.filter(item => item.Desc == value)
+
+      backLog = logger.value
+      logger.value = ''
+      ses.forEach(element => {
+        logger.value += "<p style=\"text-align:left; \">" + element.Desc + ' | ' + element.MatchStr + ' | line: ' + element.LineNo + ' | <a>' + element.Path + "</a><p>"
+      });
     };
-    const handleBlur = () => {
-      console.log('blur');
-    };
-    const handleFocus = () => {
-      console.log('focus');
-    };
+
     const filterOption = (input: string, option: any) => {
       return option.value.toLowerCase().indexOf(input.toLowerCase()) >= 0;
     };
 
+    const btnDelConditionn = () => {
+      logger.value = backLog
+      SelectValue.value = undefined
+    }
+
+
 
     onMounted(() => {
+
+      // window.ToCodeMirror = () => {
+      //   console.log(123213)
+      // }
+
       EventsOn("log", (data: any) => {
         if (data) {
           logger.value += "<p style=\"text-align:left; \">" + data + "<p>"
         }
       })
 
-      EventsOn("scan", (data: any) => {
+      EventsOn("scan", (data: Sensitive) => {
+        if (data) {
+          sensitiveResult.list.push(data)
+        }
+      })
+
+      EventsOn("scan_dis", (data: any) => {
         if (data) {
           logger.value += "<p style=\"text-align:left; \">" + data + "<p>"
         }
       })
 
-
       GetDefaultOutPath().then((result) => {
         if (result) {
           outPath.value = result
           defaultOutPath = result
+          scanPath.value = result
         }
       })
 
       GetRegx().then((result) => {
-        if (result) {
-          regexdata.list = result
-        } else {
-          message.warning("获取正则列表失败")
+        if (result.Err) {
+          message.error(result.Err)
+          return
+        }
+        if (result.Regexs) {
+          regexdata.list = result.Regexs
         }
       })
 
@@ -322,9 +414,9 @@ export default defineComponent({
     const btnSensitiveScan = () => {
       SensitiveScanFlag.value = !SensitiveScanFlag.value
       if (SensitiveScanFlag.value) {
-        logHeigth.value = '330'
+        logMinHeigth.value = '350'
       } else {
-        logHeigth.value = '550'
+        logMinHeigth.value = '610'
       }
     }
 
@@ -342,8 +434,6 @@ export default defineComponent({
           if (pathSlice.length <= 0) {
             pathSlice = wxPath.value.split("/")
           }
-          console.log(wxPath.value)
-          console.log(pathSlice)
           if (pathSlice.length <= 0) return
 
           for (let i in pathSlice) {
@@ -361,8 +451,10 @@ export default defineComponent({
     const btnDecExport = () => {
       logger.value = ''
       Unpack(wxPath.value, wxId.value, outPath.value).then((result) => {
-        if (result) {
-          message.info(result)
+        if (result.Err) {
+          message.error(result.Err)
+        } else {
+          message.success(result.Msg)
         }
       })
     }
@@ -397,23 +489,59 @@ export default defineComponent({
       })
     }
 
+
+    //敏感信息扫描
     const btnScan = () => {
+
+      if (scanPath.value === 'C:\\Users\\test\\Documents') {
+        message.warning("请检查路径是否正确")
+        return
+      } else {
+        message.info("开始扫描")
+      }
+  
+     
+      startscaning.value = true
+      selectOptions.list.length = 0
+      console.log(selectOptions.list)
       logger.value = ''
-      console.log(scanPath.value)
       ScanSensitive(scanPath.value).then((result) => {
-        if (result) {
-          message.info(result)
+        if (result.Err) {
+          message.info(result.Err)
+          return
+        }
+        let ses: Sensitive[] = result.Sensitives
+        if (result.Sensitives) {
+          console.log(result)
+          let descArray: string[] = []
+          ses.forEach(element => {
+            descArray.push(element.Desc)
+          });
+
+
+          let val = Array.from(new Set(descArray))
+          let options: option[] = []
+          val.forEach(element => {
+            let opt: option = { "value": "", "label": "" }
+            opt.value = element
+            opt.label = element
+            options.push(opt)
+          });
+          selectOptions.list = options
+          message.success(result.Msg)
         }
       })
+      startscaning.value = false
     }
 
     const btnAddRegex = () => {
       let regindex = regexdata.list.findIndex(item => item.Record == regex.value)
       if (regindex == -1) {
-        let line: Regx = {
-          Id: (regexdata.list.length + 1).toString(),
+        let line: Regex = {
+          Id: (Number(regexdata.list[regexdata.list.length - 1].Id) + 1).toString(),
           Record: regex.value,
-          Desc: desc.value
+          Desc: desc.value,
+          Status: true
         }
 
         regexdata.list.push(line)
@@ -441,8 +569,8 @@ export default defineComponent({
 
     const btnSaveRegex = () => {
       SaveRegex().then((result) => {
-        if (result) {
-          message.info(result)
+        if (result.Err) {
+          message.error(result)
         }
       })
     }
@@ -458,14 +586,90 @@ export default defineComponent({
       UpdateRegex(CurEditId, curEditDesc.value, curEditReg.value)
 
       GetRegx().then((result) => {
-        if (result) {
-          regexdata.list = result
-        } else {
-          message.warning("获取正则列表失败")
+        if (result.Err) {
+          message.error(result.Err)
+          return
+        }
+        if (result.Regexs) {
+          regexdata.list = result.Regexs
         }
       })
       message.success("更新成功")
       editRegVisible.value = false
+    }
+
+
+    const switchStatus = (id: string) => {
+      ChangeRegexStatus(id).then(res => {
+        if (res.Err) {
+          message.error(res.Err)
+        }
+        if (res.Msg) {
+          message.success(res.Msg)
+        }
+      })
+    }
+
+    const onCodeClose = () => {
+      codevisible.value = false
+    }
+
+    const btnDisCodeMirror = () => {
+      codevisible.value = true
+    }
+
+
+    const onSelectCodeFile = () => {
+      SelectOpenFile().then((res: Response) => {
+        if (res.Err) {
+          message.error(res.Err)
+        } else if (res.Data) {
+          disFilePath.value = res.Data
+          OpenDisFile(disFilePath.value).then((res: Response) => {
+            if (res.Err) {
+              message.error(res.Err)
+            } else if (res.Data) {
+              disData.value = res.Data
+            }
+          })
+        }
+      })
+    }
+
+
+    const bntOpenCodeFile = () => {
+      OpenDisFile(disFilePath.value).then((res: Response) => {
+        if (res.Err) {
+          message.error(res.Err)
+        } else if (res.Data) {
+          disData.value = res.Data
+        }
+      })
+    }
+
+    const ToCodeMirror = (event: any) => {
+      if (event.target.nodeName === 'A') {
+        codevisible.value = true
+        disFilePath.value = event.target.innerText
+        OpenDisFile(disFilePath.value).then((res: Response) => {
+          if (res.Err) {
+            message.error(res.Err)
+          } else if (res.Data) {
+            disData.value = res.Data
+          }
+        })
+
+      }
+    }
+
+    const btnStopScan = () => {
+      startscaning.value=false
+      stopscaning.value = true
+      StopScan().then((res)=>{
+        if(res){
+          stopscaning.value = false
+        }
+      })
     }
 
     return {
@@ -474,23 +678,34 @@ export default defineComponent({
       wxId,
       SensitiveScanFlag,
       regex,
-      options,
-      logHeigth,
+      disFilePath,
+      disData,
+      selectOptions,
+      logMinHeigth,
       SelectValue,
+      codevisible,
       outPath,
       columns,
       logRow,
       // regxList,
       regexdata,
+      codewidth,
+      btnStopScan,
       curEditDesc,
       desc,
       regexs,
+      stopscaning,
+      startscaning,
       curEditReg,
       wxPath,
       editRegVisible,
       filterOption,
-      handleBlur,
-      handleFocus,
+      ToCodeMirror,
+      bntOpenCodeFile,
+      onSelectCodeFile,
+      btnDisCodeMirror,
+      onCodeClose,
+      switchStatus,
       handleChange,
       btnAddRegex,
       btnScan,
@@ -498,6 +713,7 @@ export default defineComponent({
       btnSaveRuesult,
       btnOpenWxPackDir,
       bntEditOk,
+      btnDelConditionn,
       btnDelRegex,
       logChange,
       btnOpenScanDir,
