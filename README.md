@@ -12,7 +12,7 @@
 golang+wails(TS+vue3+vite+ant-design)
 
 ## 用法
-1.小程序包解压，选择【*.wxapkg】包的上级目录即可，如果路径中包括wxid，那么程序会自动识别并填入，如果路径中没有请自行填入wxid
+1.小程序包解压，选择【*.wxapkg】包的上级目录即可，如果路径中包括wxid，那么程序会自动识别并填入，如果路径中没有请自行填入wxid   
 2.小程序批量解压，如下，请以wxid为目录名，把小程序包放到对应目录下即可，程序会自动识别wxid
 ![image](https://user-images.githubusercontent.com/53891640/215651971-35f954c7-34b4-4e19-88be-c5257126e3e5.png)
 
