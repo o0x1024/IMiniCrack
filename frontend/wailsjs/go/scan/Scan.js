@@ -34,8 +34,8 @@ export function SaveResult(arg1) {
   return window['go']['scan']['Scan']['SaveResult'](arg1);
 }
 
-export function ScanSensitive(arg1) {
-  return window['go']['scan']['Scan']['ScanSensitive'](arg1);
+export function ScanSensitive(arg1, arg2) {
+  return window['go']['scan']['Scan']['ScanSensitive'](arg1, arg2);
 }
 
 export function StopScan() {

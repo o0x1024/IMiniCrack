@@ -38,6 +38,7 @@ type Scan struct {
 	wg          sync.WaitGroup
 	Sensitives  []model.Sensitive
 	threadCount int
+	runThread   int
 	taskStatus  bool
 }
 
@@ -66,40 +67,6 @@ func (s *Scan) SaveResult(content string) string {
 // 敏感信息包括
 // 手机号、身份证号、
 func (s *Scan) FindSensitiveInfo(content string) (string, string, error) {
-
-	//sst := 	[]types.SenSitiveType{
-	//	{"cradno18",`[1-9]\d{5}(18|19|([23]\d))\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{3}[0-9Xx]`,},
-	//	{"cradno15",`[1-9]\d{5}\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{2}`},
-	//	{"phone",`(13[0-9]|14[5-9]|15[0-3,5-9]|16[2,5,6,7]|17[0-8]|18[0-9]|19[0-3,5-9])\d{8}`},
-	//	{"aliyun_oss_url","[\\w-.]\\.oss.aliyuncs.com"},
-	//	{"access_key","[Aa](ccess|CCESS)_?[Kk](ey|EY)|[Aa](ccess|CCESS)_?[sS](ecret|ECRET)|[Aa](ccess|CCESS)_?(id|ID|Id)"},
-	//	{"secret_key","[Ss](ecret|ECRET)_?[Kk](ey|EY)"},
-	//	{"slack_token","(xox[p|b|o|a]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32})"},
-	//	{"slack_webhook","(xox[p|b|o|a]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32})"},
-	//	{"mailgun_api","key-[0-9a-zA-Z]{32}"},
-	//	{"mailchamp_api","[0-9a-f]{32}-us[0-9]{1,2}"},
-	//	{"picatic_api","sk_live_[0-9a-z]{32}"},
-	//	{"google_oauth_id","[0-9(+-[0-9A-Za-z_]{32}.apps.qooqleusercontent.com"},
-	//	{"amazon_aws_access_key_id","AKIA[0-9A-Z]{16}"},
-	//	{"amazon_mws_auth_token","amzn\\.mws\\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"},
-	//	{"amazonaws_url","s3\\.amazonaws.com[/]+|[a-zA-Z0-9_-]*\\.s3\\.amazonaws.com"},
-	//	{"facebook_access_token","EAACEdEose0cBA[0-9A-Za-z]+"},
-	//	{"twilio_api_key","SK[0-9a-fA-F]{32}"},
-	//	{"twilio_account_sid","AC[a-zA-Z0-9_\\-]{32}"},
-	//	{"twilio_app_sid","AP[a-zA-Z0-9_\\-]{32}"},
-	//	{"paypal_braintree_access_token","access_token\\$production\\$[0-9a-z]{16}\\$[0-9a-f]{32}"},
-	//	{"square_oauth_secret","sq0csp-[ 0-9A-Za-z\\-_]{43}"},
-	//	{"square_access_token","sqOatp-[0-9A-Za-z\\-_]{22}"},
-	//	{"stripe_standard_api","access_token\\$production\\$[0-9a-z]{16}\\$[0-9a-f]{32}"},
-	//	{"stripe_restricted_api","rk_live_[0-9a-zA-Z]{24}"},
-	//	{"github_access_token",`[a-zA-Z0-9_-]*:[a-zA-Z0-9_\\-]+@github\\.com*`},
-	//	{"private_ssh_key","-----BEGIN PRIVATE KEY-----[a-zA-Z0-9\\S]{100,}-----END PRIVATE KEY——"},
-	//	{"private_rsa_key","-----BEGIN RSA PRIVATE KEY-----[a-zA-Z0-9\\S]{100,}-----END RSA PRIVATE KEY-----"},
-	//	{"jwt1","[= ]ey[A-Za-z0-9_-].[A-Za-z0-9._-]"},
-	//	{"jwt2","[= ]ey[A-Za-z0-9_/+-].[A-Za-z0-9._/+-]"},
-	//	{"Email","[\\w!#$%&\\'*+/=?^_`{|}~-]+(?:\\.[\\w!#$%&\\'*+/=?^_`{|}~-]+)*@(?:[\\w](?:[\\w-]*[\\w])?\\.)+[\\w](?:[\\w-]*[\\w])?"},
-	//	{"Assets",`\b(?:(?:25[0-5]|2[0-4][0-9]|[1]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b`},
-	//}
 
 	color := []string{"red", "blue", "orange", "magenta", "chocolate", "pink", "copper", "thistle", "khaki", "seagreen", "lightslategray", "firebrick"}
 	var matches []string
@@ -200,16 +167,20 @@ func (s *Scan) StopScan() string {
 
 }
 
-func (s *Scan) ScanSensitive(path string) (resp model.Response) {
+func (s *Scan) ScanSensitive(path string, threadNum int) (resp model.Response) {
 
-	if path == "c:\\" {
-		resp.Err = "请检查待扫描目录是否正确"
-		return resp
-	}
+	s.runThread = threadNum
+	s.threadCount = threadNum
+
 	s.taskStatus = true
 	s.Sensitives = nil
 	pathCh = make(chan string, 5)
 	var FileList []string
+
+	if !util.PathExists(path) {
+		resp.Err = "目录不存在"
+		return resp
+	}
 
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
@@ -225,7 +196,7 @@ func (s *Scan) ScanSensitive(path string) (resp model.Response) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
-	for i := 0; i < 20; i++ {
+	for i := 0; i < s.runThread; i++ {
 		s.wg.Add(1)
 		go s.scanWork(ctx)
 	}
@@ -349,7 +320,6 @@ func (s Scan) GetRegx() (resp model.Response) {
 
 func (s *Scan) Init() {
 	fmt.Println(" scan WailsInit")
-	s.threadCount = 20
 	usr, err := user.Current()
 	checkError(err)
 
@@ -377,9 +347,9 @@ func (s *Scan) Init() {
 			{"13", "Password Field", `((|'|")([p](ass|wd|asswd|assword))(|'|")(:|=)( |)('|")(.*?)('|")(|,))`, false},
 			{"14", "Authorization Header", `((basic [a-z0-9=:_\+\/-]{5,100})|(bearer [a-z0-9_.=:_\+\/-]{5,100}))`, false},
 			//{"LinkFind ", `(?:"|')(((?:[a-zA-Z]{1,10}://|//)[^"'/]{1,}\.[a-zA-Z]{2,}[^"']{0,})|((?:/|\.\./|\./)[^"'><,;|*()(%%$^/\\\[\]][^"'><,;|()]{1,})|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{1,}\.(?:[a-zA-Z]{1,4}|action)(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-/]{1,}/[a-zA-Z0-9_\-/]{3,}(?:[\?|#][^"|']{0,}|))|([a-zA-Z0-9_\-]{1,}\.(?:php|asp|aspx|jsp|json|action|html|js|txt|xml)(?:[\?|#][^"|']{0,}|)))(?:"|')`},
-			{"15", "URL", `(?:\b[a-z\d.-]+://[^<>\s]+|\b(?:(?:(?:[^\s!@#$%^&*()_=+[\]{}\|;:'",.<>/?]+)\.)+(?:ac|ad|aero|ae|af|ag|ai|al|am|an|ao|aq|arpa|ar|asia|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|cat|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|coop|com|co|cr|cu|cv|cx|cy|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|in|io|iq|ir|is|it|je|jm|jobs|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mo|mp|mq|mr|ms|mt|museum|mu|mv|mw|mx|my|mz|name|na|nc|net|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|pro|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tr|tt|tv|tw|tz|ua|ug|uk|um|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xn--0zwm56d|xn--11b5bs3a9aj6g|xn--80akhbyknj4f|xn--9t4b11yi5a|xn--deba0ad|xn--g6w251d|xn--hgbk6aj7f53bba|xn--hlcj6aya9esc7a|xn--jxalpdlp|xn--kgbechtv|xn--zckzah|ye|yt|yu|za|zm|zw)|(?:(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])\.){3}(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5]))(?:[;/][^#?<>\s]*)?(?:\?[^#<>\s]*)?(?:#[^<>\s]*)?(?!\w))`, false},
-			{"16", "URL2", "(?i)\\b((?:[a-z][\\w-]+:(?:/{1,3}|[a-z0-9%])|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\))+(?:\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))", false},
-			{"17", "URL3", `\b(([\w-]+://?|www[.])[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|/)))`, true},
+			{"15", "URL", `(https?|ftp|file)://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]`, true},
+			{"16", "URL2", `(?:\b[a-z\d.-]+://[^<>\s]+|\b(?:(?:(?:[^\s!@#$%^&*()_=+[\]{}\|;:'",.<>/?]+)\.)+(?:ac|ad|aero|ae|af|ag|ai|al|am|an|ao|aq|arpa|ar|asia|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|biz|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|cat|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|coop|com|co|cr|cu|cv|cx|cy|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|info|int|in|io|iq|ir|is|it|je|jm|jobs|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mm|mn|mobi|mo|mp|mq|mr|ms|mt|museum|mu|mv|mw|mx|my|mz|name|na|nc|net|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|org|pa|pe|pf|pg|ph|pk|pl|pm|pn|pro|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tp|travel|tr|tt|tv|tw|tz|ua|ug|uk|um|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|xn--0zwm56d|xn--11b5bs3a9aj6g|xn--80akhbyknj4f|xn--9t4b11yi5a|xn--deba0ad|xn--g6w251d|xn--hgbk6aj7f53bba|xn--hlcj6aya9esc7a|xn--jxalpdlp|xn--kgbechtv|xn--zckzah|ye|yt|yu|za|zm|zw)|(?:(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5])\.){3}(?:[0-9]|[1-9]\d|1\d{2}|2[0-4]\d|25[0-5]))(?:[;/][^#?<>\s]*)?(?:\?[^#<>\s]*)?(?:#[^<>\s]*)?(?!\w))`, false},
+			{"17", "URL3", "(?i)\\b((?:[a-z][\\w-]+:(?:/{1,3}|[a-z0-9%])|www\\d{0,3}[.]|[a-z0-9.\\-]+[.][a-z]{2,4}/)(?:[^\\s()<>]+|\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\))+(?:\\(([^\\s()<>]+|(\\([^\\s()<>]+\\)))*\\)|[^\\s`!()\\[\\]{};:'\".,<>?«»“”‘’]))", false},
 		}
 		data, err := yaml.Marshal(regs)
 		checkError(err)

@@ -93,10 +93,10 @@
               </a-row>
               <a-row :gutter="10">
                 <a-col>
-                  <a-button @click="btnScan" type="primary" :loading="startscaning" >开始扫描</a-button>
+                  <a-button @click="btnScan" type="primary" :loading="startscaning">开始扫描</a-button>
                 </a-col>
                 <a-col>
-                  <a-button @click="btnStopScan" :loading="stopscaning" type="primary" >停止扫描</a-button>
+                  <a-button @click="btnStopScan" :loading="stopscaning" type="primary">停止扫描</a-button>
                 </a-col>
                 <a-col>
                   <a-button @click="btnSaveRuesult" type="primary">导出结果</a-button>
@@ -107,9 +107,17 @@
               </a-row>
 
               <a-row :gutter="10" style="margin-top: 50px;">
-
+                <a-col style="padding:5px">
+                  <span>线程数：</span>
+                </a-col>
+                <a-col :span="15">
+                  <a-slider v-model:value="sliderValue" :min="1" :max="50" />
+                </a-col>
+                <a-col style="padding: 5px;">
+                  <span>{{ sliderValue }}</span>
+                </a-col>
               </a-row>
-            </a-col>  
+            </a-col>
 
             <a-col :span="12">
               <a-row :gutter="10">
@@ -257,7 +265,7 @@ import { OpenWxPackDir, OpenDir, OpenDecDir, OpenScanDir, GetDefaultOutPath, Sel
 import { Unpack } from "../../wailsjs/go/crack/Crack"
 import { GetRegx, AddRegex, DelRegex, ScanSensitive, SaveResult, SaveRegex, UpdateRegex, ChangeRegexStatus, StopScan } from "../../wailsjs/go/scan/Scan"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
-import { InboxOutlined, UploadOutlined, SearchOutlined, DeleteOutlined, SaveOutlined, EditOutlined} from '@ant-design/icons-vue';
+import { InboxOutlined, UploadOutlined, SearchOutlined, DeleteOutlined, SaveOutlined, EditOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { defineComponent, ref } from 'vue';
 import MyCodeMirror from './Editor.vue'
@@ -318,6 +326,7 @@ export default defineComponent({
   setup() {
     let backLog = ''
     let desc = ref('')
+    let sliderValue = ref(10) 
     let wxId = ref('')
     let disData = ref('')
     let codewidth = ref('900px')
@@ -327,8 +336,8 @@ export default defineComponent({
     let disFilePath = ref('')
     let logMinHeigth = ref('610')
     let wxPath = ref('')
-    let startscaning = ref<boolean | DelayLoading>(false);
-    let stopscaning = ref<boolean | DelayLoading>(false);
+    let startscaning = ref(false);
+    let stopscaning = ref(false);
     let codevisible = ref(false)
     let regex = ref('')
     let editRegVisible = ref(false)
@@ -423,6 +432,8 @@ export default defineComponent({
     const btnSelectOutPath = (e: any) => {
       OpenDir().then((result) => {
         outPath.value = result
+        scanPath.value = result
+
       })
     }
 
@@ -439,8 +450,8 @@ export default defineComponent({
           for (let i in pathSlice) {
             if (pathSlice[i].indexOf("wx") != -1) {
               wxId.value = pathSlice[i]
-              scanPath.value = outPath.value + "\\" + wxId.value
               outPath.value = defaultOutPath + "\\" + wxId.value
+              scanPath.value = defaultOutPath + "\\" + wxId.value
               return
             }
           }
@@ -499,17 +510,16 @@ export default defineComponent({
       } else {
         message.info("开始扫描")
       }
-  
-     
-      startscaning.value = true
+
+
       selectOptions.list.length = 0
-      console.log(selectOptions.list)
       logger.value = ''
-      ScanSensitive(scanPath.value).then((result) => {
+      ScanSensitive(scanPath.value,sliderValue.value).then((result) => {
         if (result.Err) {
-          message.info(result.Err)
+          message.error(result.Err)
           return
         }
+        startscaning.value = true
         let ses: Sensitive[] = result.Sensitives
         if (result.Sensitives) {
           console.log(result)
@@ -530,8 +540,10 @@ export default defineComponent({
           selectOptions.list = options
           message.success(result.Msg)
         }
+        message.success(result.Msg)
+        startscaning.value = false
       })
-      startscaning.value = false
+
     }
 
     const btnAddRegex = () => {
@@ -663,10 +675,10 @@ export default defineComponent({
     }
 
     const btnStopScan = () => {
-      startscaning.value=false
+      startscaning.value = false
       stopscaning.value = true
-      StopScan().then((res)=>{
-        if(res){
+      StopScan().then((res) => {
+        if (res) {
           stopscaning.value = false
         }
       })
@@ -680,6 +692,7 @@ export default defineComponent({
       regex,
       disFilePath,
       disData,
+      sliderValue,
       selectOptions,
       logMinHeigth,
       SelectValue,

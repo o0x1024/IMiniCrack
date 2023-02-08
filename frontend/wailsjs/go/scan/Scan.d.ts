@@ -19,7 +19,7 @@ export function SaveRegex():Promise<model.Response>;
 
 export function SaveResult(arg1:string):Promise<string>;
 
-export function ScanSensitive(arg1:string):Promise<model.Response>;
+export function ScanSensitive(arg1:string,arg2:number):Promise<model.Response>;
 
 export function StopScan():Promise<string>;
 
