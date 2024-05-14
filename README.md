@@ -7,12 +7,13 @@
 - [x] 敏感信息扫描
 - [x] 自定义正则
 - [x] 文件浏览
+- [x] 分类筛选
 
 ## 技术栈
 golang+wails(TS+vue3+vite+ant-design)
 
 ## 依赖
-使用前必须先安装![webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2)
+使用前必须先安装webview2 https://developer.microsoft.com/en-us/microsoft-edge/webview2
 
 ## 用法
 1.小程序包解压，选择【*.wxapkg】包的上级目录即可，如果路径中包括wxid，那么程序会自动识别并填入，如果路径中没有请自行填入wxid   
@@ -22,9 +23,10 @@ golang+wails(TS+vue3+vite+ant-design)
 3.敏感信息扫描，程序自带了部分正则，也可以自定义正则进行扫描，扫描完成后点击路径，可以自动打开文件
 
 ## 图示
-![image](https://user-images.githubusercontent.com/53891640/215632865-4c186384-ba65-4fd1-b6a5-1eaeb022c2ae.png)
-![image](https://user-images.githubusercontent.com/53891640/215632919-fed52d14-c744-48ab-8b10-1230cf6a6a11.png)
-![image](https://user-images.githubusercontent.com/53891640/215632939-8a47cc71-c1cd-4bbf-9666-e2a37d0808a1.png)
+![image](https://github.com/o0x1024/IMiniCrack/assets/53891640/91e38ec5-1203-49b6-807e-2ee8702ae81a)
+![image](https://github.com/o0x1024/IMiniCrack/assets/53891640/75f47c08-1b47-4c77-b577-607c557cab52)
+![image](https://github.com/o0x1024/IMiniCrack/assets/53891640/a4f660e1-be6e-4796-a3ba-b34069de93aa)
+
 
 
 
