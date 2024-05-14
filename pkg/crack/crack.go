@@ -104,7 +104,7 @@ func (c *Crack) Unpack(wxpkgPath, wxid, outPath string) (resp model.Response) {
 		}
 	}
 
-	//pprof.StopCPUProfile()
+	resp.Code = 200
 	resp.Msg = "解密导出成功"
 	return resp
 }
@@ -341,6 +341,6 @@ func (c *Crack) unPackFile(wxapkgPath string, data []byte, outRoot string) error
 			out.Close()
 		}
 	}
-	fmt.Println("end")
+	runtime.EventsEmit(c.ctx, "log", "解包完成")
 	return nil
 }

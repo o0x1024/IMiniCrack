@@ -56,16 +56,13 @@
         <a-col>
           <a-button type="primary" @click="btnDecExport">解密导出</a-button>
         </a-col>
-        <a-col>
-          <a-button @click="btnEmpty">清空显示结果</a-button>
-
+        <a-col :span="4">
+          <a-button type="dashed" @click="btnSensitiveScan">敏感信息扫描</a-button>
         </a-col>
       </a-row>
 
 
-      <a-col :span="4">
-        <a-button type="dashed" @click="btnSensitiveScan">敏感信息扫描</a-button>
-      </a-col>
+
     </a-row>
 
     <a-row v-if="SensitiveScanFlag" style="margin-top: 10px;">
@@ -209,7 +206,6 @@
     <a-row style="margin-top: 10px;">
       <a-col :span="24">
         <div>
-          <!-- <div v-html="logger" @click="ToCodeMirror"></div> -->
 
           <a-table :columns="result_columns" :data-source="sensitiveResult.list" size="small" :pagination="false"
             :scroll="{ x: 220, y: 330 }">
@@ -242,6 +238,11 @@
         <!-- <a-textarea v-model:value="logger" id="logtextarea" :change="logChange()" placeholder="" :rows="logRow" /> -->
       </a-col>
     </a-row>
+
+
+    <!-- <div style="position: absolute; left: 10px; bottom: 0px"> -->
+      <div v-html="logger" style="position: absolute; left: 10px; bottom: 0px"></div>
+    <!-- </div> -->
 
 
     <a-modal v-model:visible="editRegVisible" title="编辑" @ok="bntEditOk" width="900px">
@@ -304,7 +305,7 @@ import { InboxOutlined, UploadOutlined, SearchOutlined, DeleteOutlined, SaveOutl
 import { message } from 'ant-design-vue';
 import { defineComponent, ref } from 'vue';
 import MyCodeMirror from './Editor.vue'
- 
+
 const columns = [
   { title: 'ID', dataIndex: 'Id', key: '1', align: 'center' },
   { title: '描述', dataIndex: 'Desc', key: '2', align: 'center', },
@@ -453,42 +454,9 @@ export default defineComponent({
 
 
     onMounted(() => {
-      // let dropElem = document.querySelector(`#drop-section`);
-      // if (dropElem !== null) {
-
-
-      //   dropElem.addEventListener('dragover', function (e) {
-      //     e.preventDefault();
-      //     // dropElem.classList.add('_dragover');
-      //     // dropText.innerHTML = "DRAG OVER";
-      //   });
-      //   dropElem.addEventListener('dragleave', function (e) {
-      //     e.preventDefault();
-      //     // dropElem.classList.remove('_dragover');
-      //     // dropText.innerHTML = "DROP ZONE";
-      //   });
-      //   dropElem.addEventListener('drop', function (e: any) {
-      //     e.preventDefault();
-      //     // dropElem.classList.remove('_dragover');
-      //     // dropText.innerHTML = "FILES DROPED";
-
-      //     // process files
-      //     let files = [];
-      //     if (e.dataTransfer.items) {
-      //       files = [...e.dataTransfer.items].map((item, i) => {
-      //         if (item.kind === 'file') {
-      //           const file = item.getAsFile();
-      //           return file;
-      //         }
-      //       });
-      //     }
-      //     console.log(files)
-      //     wxPath.value = files[0].path
-      // })
-      //   }
       EventsOn("log", (data: any) => {
         if (data) {
-          logger.value += "<p style=\"text-align:left; \">" + data + "<p>"
+          logger.value = "<p style=\"text-align:left; \">" + data + "<p>"
         }
       })
 
@@ -620,7 +588,6 @@ export default defineComponent({
 
       startscaning.value = true
       selectOptions.list.length = 0
-      logger.value = ''
       ScanSensitive(scanPath.value, sliderValue.value).then((result) => {
         if (result.Err) {
           message.error(result.Err)
