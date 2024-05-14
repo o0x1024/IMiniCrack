@@ -11,6 +11,9 @@
 ## 技术栈
 golang+wails(TS+vue3+vite+ant-design)
 
+## 依赖
+使用前必须先安装![webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2)
+
 ## 用法
 1.小程序包解压，选择【*.wxapkg】包的上级目录即可，如果路径中包括wxid，那么程序会自动识别并填入，如果路径中没有请自行填入wxid   
 2.小程序批量解压，如下，请以wxid为目录名，把小程序包放到对应目录下即可，程序会自动识别wxid
