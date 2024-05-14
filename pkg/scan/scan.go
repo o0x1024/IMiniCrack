@@ -122,31 +122,30 @@ func (s *Scan) scanWork(ctx context.Context) {
 					scanner := bufio.NewScanner(fp)
 					var lineNo int = 0
 					for scanner.Scan() {
-						lineNo++
-						text := scanner.Text()
-						matchStr, desc, err := s.FindSensitiveInfo(text)
-						if err != nil {
-							runtime.EventsEmit(s.Ctx, "scan_dis", err.Error())
-							return
-						}
+						if s.taskStatus {
+							lineNo++
+							text := scanner.Text()
+							matchStr, desc, err := s.FindSensitiveInfo(text)
+							if err != nil {
+								runtime.EventsEmit(s.Ctx, "scan_dis", err.Error())
+								return
+							}
 
-						if matchStr != nil {
-							sensitive := model.Sensitive{}
-							sensitive.Desc = desc
-							fmt.Println(matchStr)
-							sensitive.MatchStr = append(sensitive.MatchStr, matchStr...)
-							no := strconv.Itoa(lineNo)
-							sensitive.LineNo = no
-							sensitive.Path = path
-							result := fmt.Sprintf("%s | %s | line: %d |  <a>%s</a>", desc, matchStr, lineNo, path)
-							//fmt.Println(result)
-							s.Sensitives = append(s.Sensitives, sensitive)
-							s.Result = append(s.Result, result)
-							runtime.EventsEmit(s.Ctx, "scan", sensitive)
-							runtime.EventsEmit(s.Ctx, "scan_dis", result)
+							if matchStr != nil {
+								sensitive := model.Sensitive{}
+								sensitive.Desc = desc
+								sensitive.MatchStr = append(sensitive.MatchStr, matchStr...)
+								no := strconv.Itoa(lineNo)
+								sensitive.LineNo = no
+								sensitive.Path = path
+								//fmt.Println(result)
+								s.Sensitives = append(s.Sensitives, sensitive)
+								runtime.EventsEmit(s.Ctx, "scan", sensitive)
+							}
 						}
 					}
 				}
+				fp.Close()
 			}
 		}
 	}

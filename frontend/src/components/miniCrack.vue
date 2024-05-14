@@ -120,7 +120,7 @@
             </a-col>
 
             <a-col :span="12">
-              <a-row :gutter="10">
+              <a-row :gutter="5">
                 <a-col>
                   <a-button @click="btnAddRegex" type="primary">添加正则</a-button>
                 </a-col>
@@ -141,10 +141,10 @@
                   <a-input v-model:value="desc" placeholder="描述" />
                 </a-col>
                 <a-col>
-                  <a-button @click="onDisableAll" type="primary">Y</a-button>
+                  <a-button @click="onEnableAll" type="primary">Y</a-button>
                 </a-col>
                 <a-col>
-                  <a-button @click="onEnableAll" type="primary">N</a-button>
+                  <a-button @click="onDisableAll" type="primary">N</a-button>
                 </a-col>
 
               </a-row>
@@ -404,7 +404,7 @@ export default defineComponent({
 
     const onDisableAll = async () => {
       const res = await DisableAllRegex()
-      if (res.code === 200) {
+      if (res.Code === 200) {
         regexdata.list.forEach(item => {
           item.Status = false
         })
@@ -414,7 +414,9 @@ export default defineComponent({
 
     const onEnableAll = async () => {
       const res = await EnableAllRegex()
-      if (res.code === 200) {
+      console.log(res)
+      if (res.Code === 200) {
+        console.log(12)
         regexdata.list.forEach(item => {
           item.Status = true
         })
