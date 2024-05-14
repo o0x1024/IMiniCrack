@@ -1,4 +1,3 @@
-
 <template>
   <div style="padding: 10px;">
     <a-row :gutter="10">
@@ -6,8 +5,9 @@
         <p style="padding: 5px;">小程序包路径：</p>
       </a-col>
       <a-col>
-        <a-input v-model:value="wxPath" style="width: 530px;"
-          placeholder="Win小程序包一般在[C:\Users\{username}}\Documents\WeChat Files\Applet\]目录" />
+        <a-input id="drop-section" v-model:value="wxPath" style="width: 530px;"
+          placeholder="Win小程序包一般在[C:\Users\{username}}\Documents\WeChat Files\Applet\]目录" @dragover.prevent
+          @dragenter.prevent @drop="handleDrop" />
       </a-col>
       <a-col :span="2">
         <a-button @click="btnOpenWxPackDir">
@@ -137,15 +137,22 @@
                 <a-col :span="10">
                   <a-input v-model:value="regex" placeholder="正则" />
                 </a-col>
-                <a-col :span="6">
+                <a-col :span="4">
                   <a-input v-model:value="desc" placeholder="描述" />
                 </a-col>
+                <a-col>
+                  <a-button @click="onDisableAll" type="primary">Y</a-button>
+                </a-col>
+                <a-col>
+                  <a-button @click="onEnableAll" type="primary">N</a-button>
+                </a-col>
+
               </a-row>
               <a-row style="margin-top: 5px;">
                 <a-col>
                   <!--  -->
                   <a-table :columns="columns" :data-source="regexdata.list" size="small" :pagination="false"
-                    :scroll="{ x: 220, y: 90 }">
+                    :scroll="{ x: 220, y: 150 }">
                     <template #bodyCell="{ column, record }">
                       <template v-if="column.key === 'operation'">
                         <a-row :gutter="10" justify="center">
@@ -201,10 +208,36 @@
 
     <a-row style="margin-top: 10px;">
       <a-col :span="24">
-        <!-- :disabled="true" -->
-        <div
-          :style="{ 'border-style': 'solid', 'border-width': '1px', 'border-color': 'gray', 'padding': '10px', 'overflow-y': 'scroll', 'width': '100%', 'height': logMinHeigth + 'px' }">
-          <div v-html="logger" @click="ToCodeMirror"></div>
+        <div>
+          <!-- <div v-html="logger" @click="ToCodeMirror"></div> -->
+
+          <a-table :columns="result_columns" :data-source="sensitiveResult.list" size="small" :pagination="false"
+            :scroll="{ x: 220, y: 330 }">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.dataIndex === 'operation'">
+                <a-row :gutter="10" justify="center">
+                  <a-col>
+                    <a-button size="small" @click="ToCodeMirror(record.Path, record.LineNo)" type="primary">查询详情
+                    </a-button>
+                  </a-col>
+                  <a-col>
+                  </a-col>
+                </a-row>
+              </template>
+
+              <template v-if="column.dataIndex === 'MatchStr'">
+                <template v-for="strs in record.MatchStr">
+                  <span>{{ strs }}</span>
+                </template>
+              </template>
+
+              <template v-if="column.dataIndex === 'Path'">
+                <a-button type="link" @click="ToCodeMirror(record.Path, record.LineNo)">{{ record.Path }}</a-button>
+              </template>
+
+            </template>
+          </a-table>
+
         </div>
         <!-- <a-textarea v-model:value="logger" id="logtextarea" :change="logChange()" placeholder="" :rows="logRow" /> -->
       </a-col>
@@ -251,7 +284,7 @@
       </a-row>
       <a-row>
         <a-col :span="24">
-          <MyCodeMirror :Data="disData"></MyCodeMirror>
+          <MyCodeMirror :Data="disData" :LineNum="codeMirrorLineNum"></MyCodeMirror>
         </a-col>
       </a-row>
     </a-drawer>
@@ -260,22 +293,32 @@
 
 
 <script lang="ts">
+
 import { computed, onMounted, reactive } from 'vue'
+
 import { OpenWxPackDir, OpenDir, OpenDecDir, OpenScanDir, GetDefaultOutPath, SelectOpenFile, OpenDisFile } from "../../wailsjs/go/main/App"
 import { Unpack } from "../../wailsjs/go/crack/Crack"
-import { GetRegx, AddRegex, DelRegex, ScanSensitive, SaveResult, SaveRegex, UpdateRegex, ChangeRegexStatus, StopScan } from "../../wailsjs/go/scan/Scan"
+import { GetRegx, AddRegex, DelRegex, ScanSensitive, SaveResult, SaveRegex, UpdateRegex, ChangeRegexStatus, StopScan, DisableAllRegex, EnableAllRegex } from "../../wailsjs/go/scan/Scan"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
 import { InboxOutlined, UploadOutlined, SearchOutlined, DeleteOutlined, SaveOutlined, EditOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { defineComponent, ref } from 'vue';
 import MyCodeMirror from './Editor.vue'
-
+ 
 const columns = [
-  { title: 'ID', dataIndex: 'Id', key: '1', align: 'center', },
+  { title: 'ID', dataIndex: 'Id', key: '1', align: 'center' },
   { title: '描述', dataIndex: 'Desc', key: '2', align: 'center', },
   { title: '正则', dataIndex: 'Record', key: '3', align: 'center', ellipsis: true, },
   { title: '状态', dataIndex: 'Status', key: '4', align: 'center', },
   { title: '操作', key: 'operation', fixed: 'right', align: 'center', },
+]
+
+const result_columns = [
+  { title: '规则名称', dataIndex: 'Desc', key: 'Desc', align: 'center', width: 100, },
+  { title: '行号', dataIndex: 'LineNo', key: 'LineNo', align: 'center', width: 80 },
+  { title: '匹配结果', dataIndex: 'MatchStr', key: 'MatchStr', align: 'center', width: 400 },
+  { title: '文件位置', dataIndex: 'Path', key: 'Path', align: 'center', ellipsis: true, width: 300 },
+  { title: '操作', dataIndex: 'operation', key: 'operation', align: 'center', width: 90 },
 ]
 
 interface DelayLoading {
@@ -296,7 +339,7 @@ interface option {
 
 interface Sensitive {
   Desc: string
-  MatchStr: string
+  MatchStr: Array<string>
   LineNo: string
   Path: string
 }
@@ -326,7 +369,7 @@ export default defineComponent({
   setup() {
     let backLog = ''
     let desc = ref('')
-    let sliderValue = ref(10) 
+    let sliderValue = ref(10)
     let wxId = ref('')
     let disData = ref('')
     let codewidth = ref('900px')
@@ -352,17 +395,48 @@ export default defineComponent({
     let SensitiveScanFlag = ref(false)
     const selectOptions: { list: option[] } = reactive({ list: [] })
     let sensitiveResult: { list: Sensitive[] } = reactive({ list: [] });
+    let orginSensitiveResult: { list: Sensitive[] } = reactive({ list: [] });
+    let codeMirrorLineNum: any = ref('');
 
+
+
+
+
+    const onDisableAll = async () => {
+      const res = await DisableAllRegex()
+      if (res.code === 200) {
+        regexdata.list.forEach(item => {
+          item.Status = false
+        })
+        message.success("更新成功")
+      }
+    }
+
+    const onEnableAll = async () => {
+      const res = await EnableAllRegex()
+      if (res.code === 200) {
+        regexdata.list.forEach(item => {
+          item.Status = true
+        })
+
+        message.success("更新成功")
+      }
+
+    }
+
+    const handleDrop = (event: any) => {
+      console.log(event.dataTransfer.files)
+      event.preventDefault();
+      const file = event.dataTransfer.files[0];
+      if (file) {
+        wxPath.value = file.path; // 或者 file.webkitRelativePath，取决于你的需求
+      }
+    }
 
     const handleChange = (value: string) => {
       SelectValue.value = value
-      let ses = sensitiveResult.list.filter(item => item.Desc == value)
+      sensitiveResult.list = orginSensitiveResult.list.filter(item => item.Desc == value)
 
-      backLog = logger.value
-      logger.value = ''
-      ses.forEach(element => {
-        logger.value += "<p style=\"text-align:left; \">" + element.Desc + ' | ' + element.MatchStr + ' | line: ' + element.LineNo + ' | <a>' + element.Path + "</a><p>"
-      });
     };
 
     const filterOption = (input: string, option: any) => {
@@ -377,11 +451,39 @@ export default defineComponent({
 
 
     onMounted(() => {
+      // let dropElem = document.querySelector(`#drop-section`);
+      // if (dropElem !== null) {
 
-      // window.ToCodeMirror = () => {
-      //   console.log(123213)
-      // }
 
+      //   dropElem.addEventListener('dragover', function (e) {
+      //     e.preventDefault();
+      //     // dropElem.classList.add('_dragover');
+      //     // dropText.innerHTML = "DRAG OVER";
+      //   });
+      //   dropElem.addEventListener('dragleave', function (e) {
+      //     e.preventDefault();
+      //     // dropElem.classList.remove('_dragover');
+      //     // dropText.innerHTML = "DROP ZONE";
+      //   });
+      //   dropElem.addEventListener('drop', function (e: any) {
+      //     e.preventDefault();
+      //     // dropElem.classList.remove('_dragover');
+      //     // dropText.innerHTML = "FILES DROPED";
+
+      //     // process files
+      //     let files = [];
+      //     if (e.dataTransfer.items) {
+      //       files = [...e.dataTransfer.items].map((item, i) => {
+      //         if (item.kind === 'file') {
+      //           const file = item.getAsFile();
+      //           return file;
+      //         }
+      //       });
+      //     }
+      //     console.log(files)
+      //     wxPath.value = files[0].path
+      // })
+      //   }
       EventsOn("log", (data: any) => {
         if (data) {
           logger.value += "<p style=\"text-align:left; \">" + data + "<p>"
@@ -390,6 +492,7 @@ export default defineComponent({
 
       EventsOn("scan", (data: Sensitive) => {
         if (data) {
+          orginSensitiveResult.list.push(data)
           sensitiveResult.list.push(data)
         }
       })
@@ -400,25 +503,27 @@ export default defineComponent({
         }
       })
 
-      GetDefaultOutPath().then((result) => {
-        if (result) {
-          outPath.value = result
-          defaultOutPath = result
-          scanPath.value = result
-        }
-      })
-
-      GetRegx().then((result) => {
-        if (result.Err) {
-          message.error(result.Err)
-          return
-        }
-        if (result.Regexs) {
-          regexdata.list = result.Regexs
-        }
-      })
-
     })
+
+    GetDefaultOutPath().then((result) => {
+      if (result) {
+        outPath.value = result
+        defaultOutPath = result
+        scanPath.value = result
+      }
+    })
+
+    GetRegx().then((result) => {
+      if (result.Err) {
+        message.error(result.Err)
+        return
+      }
+      if (result.Regexs) {
+        regexdata.list = result.Regexs
+      }
+    })
+
+
 
     const btnSensitiveScan = () => {
       SensitiveScanFlag.value = !SensitiveScanFlag.value
@@ -503,7 +608,7 @@ export default defineComponent({
 
     //敏感信息扫描
     const btnScan = () => {
-
+      sensitiveResult.list = []
       if (scanPath.value === 'C:\\Users\\test\\Documents') {
         message.warning("请检查路径是否正确")
         return
@@ -511,15 +616,15 @@ export default defineComponent({
         message.info("开始扫描")
       }
 
-
+      startscaning.value = true
       selectOptions.list.length = 0
       logger.value = ''
-      ScanSensitive(scanPath.value,sliderValue.value).then((result) => {
+      ScanSensitive(scanPath.value, sliderValue.value).then((result) => {
         if (result.Err) {
           message.error(result.Err)
           return
         }
-        startscaning.value = true
+
         let ses: Sensitive[] = result.Sensitives
         if (result.Sensitives) {
           console.log(result)
@@ -538,7 +643,6 @@ export default defineComponent({
             options.push(opt)
           });
           selectOptions.list = options
-          message.success(result.Msg)
         }
         message.success(result.Msg)
         startscaning.value = false
@@ -572,7 +676,7 @@ export default defineComponent({
     }
 
     const btnSaveRuesult = () => {
-      SaveResult(logger.value).then((result) => {
+      SaveResult(orginSensitiveResult.list).then((result) => {
         if (result) {
           message.info(result)
         }
@@ -626,7 +730,8 @@ export default defineComponent({
       codevisible.value = false
     }
 
-    const btnDisCodeMirror = () => {
+    const btnDisCodeMirror = (lineno: any) => {
+      codeMirrorLineNum.value = lineno
       codevisible.value = true
     }
 
@@ -659,19 +764,20 @@ export default defineComponent({
       })
     }
 
-    const ToCodeMirror = (event: any) => {
-      if (event.target.nodeName === 'A') {
-        codevisible.value = true
-        disFilePath.value = event.target.innerText
-        OpenDisFile(disFilePath.value).then((res: Response) => {
-          if (res.Err) {
-            message.error(res.Err)
-          } else if (res.Data) {
-            disData.value = res.Data
-          }
-        })
+    const ToCodeMirror = (path: any, lineno: any) => {
+      codevisible.value = true
+      disFilePath.value = path
+      codeMirrorLineNum.value = lineno
 
-      }
+      OpenDisFile(disFilePath.value).then((res: Response) => {
+        if (res.Err) {
+          message.error(res.Err)
+        } else if (res.Data) {
+          disData.value = res.Data
+        }
+      })
+
+
     }
 
     const btnStopScan = () => {
@@ -691,19 +797,24 @@ export default defineComponent({
       SensitiveScanFlag,
       regex,
       disFilePath,
+      onDisableAll,
       disData,
       sliderValue,
       selectOptions,
+      result_columns,
       logMinHeigth,
       SelectValue,
       codevisible,
       outPath,
       columns,
+      handleDrop,
+      codeMirrorLineNum,
       logRow,
       // regxList,
       regexdata,
       codewidth,
       btnStopScan,
+      sensitiveResult,
       curEditDesc,
       desc,
       regexs,
@@ -715,6 +826,7 @@ export default defineComponent({
       filterOption,
       ToCodeMirror,
       bntOpenCodeFile,
+      onEnableAll,
       onSelectCodeFile,
       btnDisCodeMirror,
       onCodeClose,

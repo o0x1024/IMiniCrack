@@ -1,20 +1,20 @@
 package main
 
 import (
+	"IMiniCrack/pkg/global"
 	"IMiniCrack/pkg/model"
 	"IMiniCrack/pkg/scan"
 	"context"
-	"github.com/wailsapp/wails"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"os"
 	"os/exec"
 	"os/user"
 	runtime2 "runtime"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
 type App struct {
-	rt  *wails.Runtime
 	ctx context.Context
 }
 
@@ -27,8 +27,9 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 
+	global.WailsCtx = &ctx
 	a.ctx = ctx
-	runtime.WindowSetBackgroundColour(a.ctx, 255, 255, 255, 255)
+	// runtime.WindowSetBackgroundColour(a.ctx, 255, 255, 255, 255)
 }
 
 // 保存正则信息
@@ -181,10 +182,4 @@ func (a *App) OpenScanDir(path string) string {
 		panic(err)
 	}
 	return dir
-}
-
-func (p *App) WailsInit(runtime *wails.Runtime) error {
-	p.rt = runtime
-
-	return nil
 }

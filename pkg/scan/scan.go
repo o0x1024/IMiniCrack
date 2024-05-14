@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/dlclark/regexp2"
-	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gopkg.in/yaml.v2"
 )
@@ -27,12 +26,14 @@ func init() {
 	Sc.Init()
 }
 
-var pathCh = make(chan string, 100)
+var (
+	pathCh = make(chan string, 100)
+	_ctx   *context.Context
+)
 
 type Scan struct {
 	Regex       []model.Regex `yaml:"regx"`
 	Result      []string
-	rt          *wails.Runtime
 	Ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
@@ -42,7 +43,7 @@ type Scan struct {
 	taskStatus  bool
 }
 
-func (s *Scan) SaveResult(content string) string {
+func (s *Scan) SaveResult(sst []model.Sensitive) string {
 	ur, err := user.Current()
 	if err != nil {
 		return err.Error()
@@ -50,15 +51,25 @@ func (s *Scan) SaveResult(content string) string {
 	path, err := runtime.SaveFileDialog(s.Ctx, runtime.SaveDialogOptions{
 		DefaultDirectory: ur.HomeDir + "\\Documents",
 		Title:            "save result",
-		DefaultFilename:  "result.txt",
+		DefaultFilename:  "result.csv",
 	})
 	if err != nil {
 		return err.Error()
 	}
 
-	err = os.WriteFile(path, []byte(content), 0666)
+	fp, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return err.Error()
+	}
+	_, err = fp.WriteString("role,lineno,result,path\n")
+	if err != nil {
+		return err.Error()
+	}
+	for _, v := range sst {
+		_, err = fp.WriteString(fmt.Sprintf("%s,%s,%s,%s\n", v.Desc, v.LineNo, strings.Join(v.MatchStr, ","), v.Path))
+		if err != nil {
+			return err.Error()
+		}
 	}
 
 	return "保存成功"
@@ -66,38 +77,29 @@ func (s *Scan) SaveResult(content string) string {
 
 // 敏感信息包括
 // 手机号、身份证号、
-func (s *Scan) FindSensitiveInfo(content string) (string, string, error) {
+func (s *Scan) FindSensitiveInfo(content string) ([]string, string, error) {
 
-	color := []string{"red", "blue", "orange", "magenta", "chocolate", "pink", "copper", "thistle", "khaki", "seagreen", "lightslategray", "firebrick"}
 	var matches []string
 	for _, v := range s.Regex {
 		if v.Status {
 			tmpreg, err := regexp2.Compile(v.Record, 0)
 			if err != nil {
-				return "", "", err
+				return nil, "", err
 			}
 			m, err := tmpreg.FindStringMatch(content)
 			if err != nil {
-				return "", "", err
+				return nil, "", err
 			}
 			for m != nil {
 				matches = append(matches, m.String())
 				m, _ = tmpreg.FindNextMatch(m)
 			}
 			if matches != nil {
-				allstr := ""
-				for i, v := range matches {
-					if i >= len(color) {
-						allstr += " <span style=\"color: red;\">" + v + "</span>"
-					} else {
-						allstr += " <span style=\"color: " + color[i] + ";\">" + v + "</span>"
-					}
-				}
-				return allstr, v.Desc, nil
+				return matches, v.Desc, nil
 			}
 		}
 	}
-	return "", "", nil
+	return nil, "", nil
 }
 
 func (s *Scan) scanWork(ctx context.Context) {
@@ -128,11 +130,11 @@ func (s *Scan) scanWork(ctx context.Context) {
 							return
 						}
 
-						if matchStr != "" {
+						if matchStr != nil {
 							sensitive := model.Sensitive{}
-							matchStr = strings.Replace(matchStr, "\n", "", -1)
 							sensitive.Desc = desc
-							sensitive.MatchStr = matchStr
+							fmt.Println(matchStr)
+							sensitive.MatchStr = append(sensitive.MatchStr, matchStr...)
 							no := strconv.Itoa(lineNo)
 							sensitive.LineNo = no
 							sensitive.Path = path
@@ -228,11 +230,6 @@ func NewScan() *Scan {
 	return &Scan{}
 }
 
-func (s *Scan) WailsInit(runtime *wails.Runtime) error {
-	s.rt = runtime
-	return nil
-}
-
 func (s *Scan) SaveRegex() (resp model.Response) {
 	usr, err := user.Current()
 	if err != nil {
@@ -292,7 +289,7 @@ func (s *Scan) UpdateRegex(id, desc, record string) {
 	}
 }
 
-func (s Scan) ChangeRegexStatus(id string) (resp model.Response) {
+func (s *Scan) ChangeRegexStatus(id string) (resp model.Response) {
 	var haveId = false
 	for i, v := range s.Regex {
 		if v.Id == id {
@@ -306,6 +303,23 @@ func (s Scan) ChangeRegexStatus(id string) (resp model.Response) {
 		return resp
 	}
 	resp.Err = "数据错误"
+	return resp
+}
+
+func (s *Scan) DisableAllRegex() (resp model.Response) {
+	for i, _ := range s.Regex {
+		s.Regex[i].Status = false
+	}
+	resp.Code = 200
+	return resp
+}
+
+func (s *Scan) EnableAllRegex() (resp model.Response) {
+	for i, _ := range s.Regex {
+		s.Regex[i].Status = true
+	}
+
+	resp.Code = 200
 	return resp
 }
 

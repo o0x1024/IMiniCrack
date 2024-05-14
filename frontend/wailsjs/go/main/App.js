@@ -29,7 +29,3 @@ export function OpenWxPackDir(arg1) {
 export function SelectOpenFile() {
   return window['go']['main']['App']['SelectOpenFile']();
 }
-
-export function WailsInit(arg1) {
-  return window['go']['main']['App']['WailsInit'](arg1);
-}

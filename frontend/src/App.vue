@@ -1,4 +1,3 @@
-
 <template>
   <div class="main">
     <miniCrack />
@@ -8,6 +7,9 @@
 
 <script lang="ts" setup>
 import miniCrack from './components/miniCrack.vue'
+
+
+
 
 </script>
 

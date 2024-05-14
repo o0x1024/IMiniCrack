@@ -25,8 +25,8 @@ func main() {
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:  "IMiniCrack   -  gelenlen",
-		Width:  1024,
-		Height: 860,
+		Width:  1200,
+		Height: 960,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

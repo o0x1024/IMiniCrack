@@ -2,6 +2,7 @@ package crack
 
 import (
 	"IMiniCrack/pkg/jsbeautifier/jsbeautifier"
+	"IMiniCrack/pkg/logger"
 	"IMiniCrack/pkg/model"
 	"IMiniCrack/pkg/scan"
 	"IMiniCrack/pkg/util"
@@ -13,20 +14,19 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/wailsapp/wails"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/crypto/pbkdf2"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 type Crack struct {
 	ctx context.Context
-	rt  *wails.Runtime
-	log *wails.CustomLogger
+	log *logger.CustomLogger
 }
 
 type WxapkgFile struct {
@@ -50,14 +50,6 @@ type PackList struct {
 func (c *Crack) GetCtx(ctx context.Context) {
 	c.ctx = ctx
 	scan.Sc.Ctx = ctx
-}
-
-// WailsInit .
-func (c *Crack) WailsInit(runtime *wails.Runtime) error {
-	fmt.Println("Crack WailsInit")
-	c.log = c.rt.Log.New("Crack")
-	c.rt = runtime
-	return nil
 }
 
 func (c *Crack) GetFileList(outpath string) (resp model.Response) {

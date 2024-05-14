@@ -1,22 +1,22 @@
 <template>
-    <Codemirror class="codemirror" v-model:value="code" :options="cmOptions" border placeholder="test placeholder" :height="660"
-        @change="change" />
+    <Codemirror class="codemirror" v-model:value="code" :options="cmOptions" border placeholder="test placeholder"
+        :height="660" @change="change" />
 </template>
 
 <script lang="ts">
 import Codemirror from "codemirror-editor-vue3";
-import { defineComponent, ref, computed } from 'vue';
+import { defineComponent, ref, computed, watch, onMounted } from 'vue';
 import "codemirror/mode/javascript/javascript.js";
 import "codemirror/theme/dracula.css";
 
 
-window.addEventListener('touchstart', function(event) {
+window.addEventListener('touchstart', function (event) {
     // some logic
     event.preventDefault(); // <-- that should not be used in passive
     // some other magic
 });
 
-window.addEventListener('touchmove', function(event) {
+window.addEventListener('touchmove', function (event) {
     // some logic
     event.preventDefault(); // <-- that should not be used in passive
     // some other magic
@@ -25,6 +25,9 @@ window.addEventListener('touchmove', function(event) {
 export default defineComponent({
     props: {
         Data: {
+            type: String
+        },
+        LineNum: {
             type: String
         }
     },
@@ -40,7 +43,28 @@ export default defineComponent({
             }
         })
 
-        const change = () => {
+        setInterval(() => {
+            code.value += "test \n";
+        }, 300);
+
+
+        watch(() => code, (newcode: any) => {
+            console.log(newcode)
+
+        })
+
+        onMounted(() => {
+            console.log("mouasdnted")
+        })
+
+        const change = (val: any, instance: any) => {
+
+            console.log(props.LineNum)
+            var line = instance.getLineHandle(props.LineNum);
+            var lineStart = { line: Number(props.LineNum)-1, ch: 0 };
+            var lineEnd = { line: Number(props.LineNum), ch: 0 };
+            instance.markText(lineStart, lineEnd, { className: "code-highlight" });
+            instance.scrollIntoView( Number(props.LineNum)+20);
         }
 
         return {
@@ -61,10 +85,12 @@ export default defineComponent({
 </script>
 
 <style>
-
-
-.codemirror{
+.codemirror {
     touch-action: none;
 }
 
+
+.code-highlight {
+    background-color: rgb(80, 78, 78);
+  }
 </style>

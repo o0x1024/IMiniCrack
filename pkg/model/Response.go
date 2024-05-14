@@ -2,7 +2,7 @@ package model
 
 type Sensitive struct {
 	Desc     string
-	MatchStr string
+	MatchStr []string
 	LineNo   string
 	Path     string
 }
@@ -15,6 +15,7 @@ type Regex struct {
 }
 
 type Response struct {
+	Code       int
 	Sensitives []Sensitive
 	Err        string
 	Data       string

@@ -14,6 +14,14 @@ export function DelRegex(arg1) {
   return window['go']['scan']['Scan']['DelRegex'](arg1);
 }
 
+export function DisableAllRegex() {
+  return window['go']['scan']['Scan']['DisableAllRegex']();
+}
+
+export function EnableAllRegex() {
+  return window['go']['scan']['Scan']['EnableAllRegex']();
+}
+
 export function FindSensitiveInfo(arg1) {
   return window['go']['scan']['Scan']['FindSensitiveInfo'](arg1);
 }
@@ -44,8 +52,4 @@ export function StopScan() {
 
 export function UpdateRegex(arg1, arg2, arg3) {
   return window['go']['scan']['Scan']['UpdateRegex'](arg1, arg2, arg3);
-}
-
-export function WailsInit(arg1) {
-  return window['go']['scan']['Scan']['WailsInit'](arg1);
 }

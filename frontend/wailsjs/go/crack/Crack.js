@@ -9,7 +9,3 @@ export function GetFileList(arg1) {
 export function Unpack(arg1, arg2, arg3) {
   return window['go']['crack']['Crack']['Unpack'](arg1, arg2, arg3);
 }
-
-export function WailsInit(arg1) {
-  return window['go']['crack']['Crack']['WailsInit'](arg1);
-}
